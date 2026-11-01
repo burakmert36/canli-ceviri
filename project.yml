@@ -11,7 +11,7 @@ settings:
     SWIFT_VERSION: "5.0"
     MARKETING_VERSION: "1.0.0"
     CURRENT_PROJECT_VERSION: "1"
-    TARGETED_DEVICE_FAMILY: "1"
+    TARGETED_DEVICE_FAMILY: "1,2"
     CODE_SIGNING_ALLOWED: "NO"
     CODE_SIGNING_REQUIRED: "NO"
     CODE_SIGN_IDENTITY: ""
@@ -43,7 +43,17 @@ targets:
         LSRequiresIPhoneOS: true
         UILaunchScreen: {}
         UIBackgroundModes: [audio]
-        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        NSCameraUsageDescription: Kamera ile TV ekranındaki altyazıları okuyup çevirmek için kullanılır.
+        NSMicrophoneUsageDescription: Kamera/TV modunda TV'deki konuşmaları dinleyip çevirmek için kullanılır.
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
         NSSpeechRecognitionUsageDescription: Telefonda çalan videolardaki konuşmaları yazıya dökmek için kullanılır.

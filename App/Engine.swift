@@ -1,6 +1,7 @@
 import Foundation
 import UIKit
 import Combine
+import AVFoundation
 
 struct Segment {
     var id: Int
@@ -9,11 +10,14 @@ struct Segment {
     var translatedSource: String = ""
 }
 
-/// Ses/ekran → yazı → çeviri → kutu akışını yöneten ana sınıf. Tüm durum ana iş parçacığında tutulur.
+/// Ses/ekran/kamera → yazı → çeviri → kutu (+ seslendirme, geçmiş) akışını yöneten ana sınıf.
+/// Tüm durum ana iş parçacığında tutulur.
 final class Engine: ObservableObject {
     static let shared = Engine()
 
     @Published private(set) var running = false
+    @Published private(set) var runMode: RunMode = .screen
+    /// Kaynak bağlı mı (ekran modunda yayın, kamera modunda kamera/mikrofon)?
     @Published private(set) var audioConnected = false
     @Published private(set) var status = "Hazır"
     @Published private(set) var paused = false
@@ -21,22 +25,32 @@ final class Engine: ObservableObject {
     /// Altyazı alanı ayarı için son ekran görüntüsü ve orada okunan yazı.
     @Published private(set) var ocrPreview: UIImage?
     @Published private(set) var ocrPreviewText = ""
+    /// Önizlemede gösterilecek okuma alanı (sol üst köşe başlangıçlı, 0–1).
+    @Published private(set) var ocrPreviewArea: CGRect?
+    /// Uygulama içinde gösterilen (kamera modu) son metinler.
+    @Published private(set) var shownOriginal = ""
+    @Published private(set) var shownTranslation = ""
 
     let settings = AppSettings.shared
     let pip = PiPManager()
+    let camera = CameraCapture()
+    let speaker = Speaker()
 
     private let renderer = OverlayRenderer()
     private let receiver = AudioReceiver()
     private let keepAlive = KeepAlive()
+    private let mic = MicCapture()
     private let reader = ScreenTextReader()
     private let captions = CaptionTracker()
+    private let history = HistoryStore.shared
     private var cfg: EngineConfig
     private var service: TranslationService
     private var apple: AppleRecognizer?
     private var chunker: Chunker?
-    private var screenMode = false
+    private var screenMode = false   // metin kaynağı: görüntüdeki yazı (ekran ya da kamera)
     private var timer: Timer?
     private var cancellables = Set<AnyCancellable>()
+    private var broadcastConnected = false
 
     // Altyazı durumu
     private var committed: [Segment] = []
@@ -47,6 +61,10 @@ final class Engine: ObservableObject {
     private var segStart = Date()
     private var lastAudioAt = Date.distantPast
     private var recognizerErrors = 0
+
+    // Seslendirme ve geçmiş
+    private var spoken = Set<Int>()
+    private var historyIDs: [Int: UUID] = [:]
 
     // Uygulama durumu (ekran okuma yalnızca başka uygulamadayken yapılır)
     private var appInBackground = false
@@ -73,7 +91,10 @@ final class Engine: ObservableObject {
         cfg = EngineConfig(AppSettings.shared)
         service = TranslationService(config: cfg)
 
-        pip.onUserClosed = { [weak self] in self?.stop() }
+        pip.onUserClosed = { [weak self] in
+            guard let self = self, self.runMode == .screen else { return }
+            self.stop()
+        }
         pip.onPauseToggled = { [weak self] p in self?.setPaused(p) }
         pip.onStatus = { [weak self] s in self?.status = s }
         pip.onActiveChanged = { [weak self] active in self?.boxVisible = active }
@@ -82,21 +103,34 @@ final class Engine: ObservableObject {
             self.settings.changeLines(by: forward ? 1 : -1)
             self.renderNow()
         }
-        pip.showsSkipButtons = settings.pipButtonsResize
+        pip.showsSkipButtons = settings.pipButtonsResize && !settings.boxLocked
 
         receiver.onAudio = { [weak self] samples in
-            DispatchQueue.main.async { self?.handleAudio(samples) }
+            DispatchQueue.main.async {
+                guard let self = self, self.runMode == .screen else { return }
+                self.handleAudio(samples)
+            }
         }
         receiver.onFrame = { [weak self] frame in
-            self?.handleFrameOnReceiverQueue(frame)
+            self?.handleBroadcastFrame(frame)
         }
         receiver.onConnectionChange = { [weak self] connected in
             DispatchQueue.main.async { self?.connectionChanged(connected) }
         }
         receiver.ensureListening()
 
+        camera.onFrame = { [weak self] frame in
+            DispatchQueue.main.async { self?.handleCameraFrame(frame) }
+        }
+        mic.onSamples = { [weak self] samples in
+            DispatchQueue.main.async {
+                guard let self = self, self.runMode == .camera else { return }
+                self.handleAudio(samples)
+            }
+        }
+
         reader.onResult = { [weak self] lines, frame in self?.handleOCR(lines, frame: frame) }
-        reader.configure(top: settings.ocrTop, bottom: settings.ocrBottom, sourceLang: settings.sourceLang)
+        configureReader()
 
         settings.objectWillChange
             .debounce(for: .milliseconds(250), scheduler: DispatchQueue.main)
@@ -127,11 +161,11 @@ final class Engine: ObservableObject {
         DispatchQueue.main.async { [weak self] in self?.renderNow() }
     }
 
-    // MARK: - Başlat / Durdur
+    // MARK: - Başlat / Durdur (ekran modu)
 
     func start() {
         guard !running else { return }
-        let c = EngineConfig(settings)
+        let c = EngineConfig(settings, mode: .screen)
         if let problem = validate(c) { status = problem; return }
         if c.usesAppleASR {
             status = "İzin isteniyor…"
@@ -155,9 +189,9 @@ final class Engine: ObservableObject {
         let needsGemini = (c.usesCloudASR && c.asr == .gemini) || (c.translationEnabled && c.translator == .gemini)
         let needsOpenAI = (c.usesCloudASR && c.asr == .openai) || (c.translationEnabled && c.translator == .openai)
         let needsClaude = c.translationEnabled && c.translator == .claude
-        if needsGemini && c.geminiKey.isEmpty { return "Gemini API anahtarını gir (aşağıda)." }
-        if needsOpenAI && c.openaiKey.isEmpty { return "OpenAI API anahtarını gir (aşağıda)." }
-        if needsClaude && c.claudeKey.isEmpty { return "Claude API anahtarını gir (aşağıda)." }
+        if needsGemini && c.geminiKey.isEmpty { return "Gemini API anahtarını gir (Ayarlar)." }
+        if needsOpenAI && c.openaiKey.isEmpty { return "OpenAI API anahtarını gir (Ayarlar)." }
+        if needsClaude && c.claudeKey.isEmpty { return "Claude API anahtarını gir (Ayarlar)." }
         return nil
     }
 
@@ -168,6 +202,7 @@ final class Engine: ObservableObject {
             status = "Ses oturumu açılamadı: \(error.localizedDescription)"
             return
         }
+        runMode = .screen
         receiver.ensureListening()
         cfg = c
         service = TranslationService(config: c)
@@ -178,19 +213,74 @@ final class Engine: ObservableObject {
         paused = false
         pip.paused = false
         pip.autoStartWhenBackgrounded = true
-        pip.showsSkipButtons = settings.pipButtonsResize
-        status = audioConnected ? connectedStatus : "Ekran yayını bekleniyor…"
-        timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in self?.tick() }
+        pip.showsSkipButtons = settings.pipButtonsResize && !settings.boxLocked
+        audioConnected = broadcastConnected
+        status = broadcastConnected ? connectedStatus : "Ekran yayını bekleniyor…"
+        startTimer()
         renderNow()
         pip.start()
 
         // Ekran yayını açık değilse sistem penceresini aç.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { [weak self] in
-            guard let self = self, self.running, !self.audioConnected else { return }
+            guard let self = self, self.running, self.runMode == .screen, !self.broadcastConnected else { return }
             BroadcastPicker.present()
         }
     }
+
+    // MARK: - Başlat (kamera / TV modu)
+
+    func startCamera() {
+        guard !running else { return }
+        let c = EngineConfig(settings, mode: .camera)
+        if let problem = validate(c) { status = problem; return }
+        status = "İzinler kontrol ediliyor…"
+        Permissions.request(camera: c.input == .screen, microphone: c.input == .audio, speech: c.usesAppleASR) { [weak self] ok, message in
+            guard let self = self else { return }
+            if ok { self.beginCamera(c) } else { self.status = message }
+        }
+    }
+
+    private func beginCamera(_ c: EngineConfig) {
+        do {
+            let session = AVAudioSession.sharedInstance()
+            if c.input == .audio {
+                try session.setCategory(.playAndRecord, mode: .default,
+                                        options: [.defaultToSpeaker, .allowBluetoothA2DP, .mixWithOthers])
+            } else {
+                try session.setCategory(.playback, mode: .spokenAudio, options: [.mixWithOthers])
+            }
+            try session.setActive(true)
+        } catch {
+            status = "Ses oturumu açılamadı: \(error.localizedDescription)"
+            return
+        }
+        runMode = .camera
+        cfg = c
+        service = TranslationService(config: c)
+        resetCaptions()
+        guard startRecognition() else { return }
+        if c.input == .audio {
+            do {
+                try mic.start()
+            } catch {
+                status = "Mikrofon açılamadı: \(error.localizedDescription)"
+                stopRecognition()
+                return
+            }
+        } else {
+            camera.start()
+            camera.setZoom(CGFloat(settings.camZoom))
+        }
+        running = true
+        paused = false
+        audioConnected = true
+        status = c.input == .audio ? "Mikrofon dinleniyor" : "Kamera altyazıyı okuyor"
+        UIApplication.shared.isIdleTimerDisabled = true
+        startTimer()
+        renderNow()
+    }
+
+    // MARK: - Durdur
 
     func stop() {
         guard running else { return }
@@ -198,36 +288,83 @@ final class Engine: ObservableObject {
         timer?.invalidate()
         timer = nil
         debounce?.cancel()
-        receiver.setVideoEnabled(false)
-        receiver.requestBroadcastStop()
+        speaker.stop()
         stopRecognition()
-        pip.autoStartWhenBackgrounded = false
-        pip.stop()
-        keepAlive.stop()
+        if runMode == .camera {
+            mic.stop()
+            UIApplication.shared.isIdleTimerDisabled = false
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            audioConnected = broadcastConnected
+            runMode = .screen
+        } else {
+            receiver.setVideoEnabled(false)
+            receiver.requestBroadcastStop()
+            pip.autoStartWhenBackgrounded = false
+            pip.stop()
+            keepAlive.stop()
+        }
         status = "Durduruldu"
         renderNow()
+    }
+
+    func toggle(_ mode: RunMode) {
+        if running {
+            stop()
+        } else if mode == .camera {
+            startCamera()
+        } else {
+            start()
+        }
     }
 
     func openBroadcastPicker() { BroadcastPicker.present() }
 
     func showBox() {
-        guard running else { return }
+        guard running, runMode == .screen else { return }
         renderNow()
         pip.start()
     }
 
+    func togglePause() { setPaused(!paused) }
+
+    /// Kutudaki ve geçmişteki son metinleri temizler.
+    func clearCaptions() {
+        committed.removeAll()
+        live.original = ""
+        live.translation = ""
+        live.translatedSource = ""
+        liveWords = []
+        renderNow()
+    }
+
     private var connectedStatus: String {
-        screenMode ? "Ekrandaki altyazı okunuyor" : "Ses alınıyor"
+        if runMode == .camera { return cfg.input == .audio ? "Mikrofon dinleniyor" : "Kamera altyazıyı okuyor" }
+        return screenMode ? "Ekrandaki altyazı okunuyor" : "Ses alınıyor"
     }
 
     private func setPaused(_ p: Bool) {
         paused = p
-        if p { debounce?.cancel() }
-        status = p ? "Duraklatıldı (kutudaki ▶︎ ile devam)" : (audioConnected ? connectedStatus : status)
+        pip.paused = p
+        pip.refreshControls()
+        if p { debounce?.cancel(); speaker.stop() }
+        status = p ? "Duraklatıldı" : (audioConnected ? connectedStatus : status)
         renderNow()
     }
 
+    private func startTimer() {
+        timer?.invalidate()
+        timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in self?.tick() }
+    }
+
     // MARK: - Tanıma
+
+    private func configureReader() {
+        let area = runMode == .camera
+            ? settings.cameraRect
+            : ScreenTextReader.band(top: settings.ocrTop, bottom: settings.ocrBottom)
+        reader.configure(area: area, auto: runMode == .screen && settings.ocrAuto,
+                         sourceLang: running ? cfg.sourceLang : settings.sourceLang)
+    }
 
     private func startRecognition() -> Bool {
         stopRecognition()
@@ -236,12 +373,13 @@ final class Engine: ObservableObject {
         if cfg.input == .screen {
             screenMode = true
             captions.resetAll()
-            reader.configure(top: settings.ocrTop, bottom: settings.ocrBottom, sourceLang: cfg.sourceLang)
-            receiver.setVideoEnabled(true)
+            reader.resetDetection()
+            configureReader()
+            if runMode == .screen { receiver.setVideoEnabled(true) }
             return true
         }
         screenMode = false
-        receiver.setVideoEnabled(false)
+        if runMode == .screen { receiver.setVideoEnabled(false) }
         if cfg.asr == .apple {
             guard let r = AppleRecognizer(localeID: cfg.sourceLang) else {
                 status = "Bu dil için Apple ses tanıma yok. Bulut tanımayı dene."
@@ -277,6 +415,8 @@ final class Engine: ObservableObject {
         liveWords = []
         inFlight.removeAll()
         dirty.removeAll()
+        spoken.removeAll()
+        historyIDs.removeAll()
         nextSeq = 0
         applySeq = 0
         cloudPending.removeAll()
@@ -285,13 +425,18 @@ final class Engine: ObservableObject {
     }
 
     private func settingsChanged() {
-        pip.showsSkipButtons = settings.pipButtonsResize
-        reader.configure(top: settings.ocrTop, bottom: settings.ocrBottom,
-                         sourceLang: running ? cfg.sourceLang : settings.sourceLang)
+        pip.showsSkipButtons = settings.pipButtonsResize && !settings.boxLocked
+        configureReader()
         refreshPreviewText()
         renderNow()
         guard running else { return }
-        let new = EngineConfig(settings)
+        let new = EngineConfig(settings, mode: runMode)
+        if new.input != cfg.input && runMode == .camera {
+            // Kamera ↔ mikrofon geçişi farklı donanım ister: temiz bir yeniden başlatma.
+            stop()
+            status = "Kaynak değişti — tekrar Başlat'a dokun"
+            return
+        }
         let recognitionChanged = new.input != cfg.input || new.asr != cfg.asr || new.sourceLang != cfg.sourceLang
         let changed = recognitionChanged || new.translator != cfg.translator || new.targetLang != cfg.targetLang
             || new.displayMode != cfg.displayMode
@@ -319,10 +464,18 @@ final class Engine: ObservableObject {
         status = "Ayarlar uygulandı"
     }
 
+    /// Kendi seslendirmemizi tekrar dinlememek için gelen sesi geçici olarak yok sayar.
+    private var shouldIgnoreAudioForEcho: Bool {
+        guard settings.speakEnabled, speaker.isBusy else { return false }
+        // Kamera modunda kulaklık takılıysa hoparlörden yankı olmaz.
+        if runMode == .camera && speaker.headphonesConnected { return false }
+        return true
+    }
+
     private func handleAudio(_ samples: [Int16]) {
         guard running, !screenMode else { return }
         lastAudioAt = Date()
-        if paused { return }
+        if paused || shouldIgnoreAudioForEcho { return }
         if let a = apple {
             a.append(samples)
         } else if let c = chunker {
@@ -331,6 +484,8 @@ final class Engine: ObservableObject {
     }
 
     private func connectionChanged(_ connected: Bool) {
+        broadcastConnected = connected
+        guard runMode == .screen else { return }
         audioConnected = connected
         if running {
             status = connected ? connectedStatus : "Ekran yayını kapandı. Tekrar açmak için ⏺ simgesine dokun."
@@ -340,25 +495,38 @@ final class Engine: ObservableObject {
         scheduleRender()
     }
 
-    // MARK: Ekrandaki altyazı
+    // MARK: Görüntüdeki yazı (ekran ya da kamera)
 
     /// Alıcı kuyruğunda çağrılır.
-    private func handleFrameOnReceiverQueue(_ frame: ScreenFrame) {
+    private func handleBroadcastFrame(_ frame: ScreenFrame) {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             // Kendi uygulamamız açıkken ekranda kendi ayarlarımız var; onları okumayalım.
             guard self.appInBackground else { return }
             self.lastOutsideFrame = frame
-            guard self.running, self.screenMode, !self.paused else { return }
+            guard self.running, self.runMode == .screen, self.screenMode, !self.paused else { return }
             self.reader.submit(frame)
         }
     }
 
+    private func handleCameraFrame(_ frame: ScreenFrame) {
+        guard running, runMode == .camera, screenMode, !paused else { return }
+        reader.submit(frame)
+    }
+
     private func handleOCR(_ lines: [OCRLine], frame: ScreenFrame) {
-        guard running, screenMode, appInBackground, !paused else { return }
-        let (o, t) = displayTexts()
-        let exclude = CaptionTracker.normalize(o + " " + t)
-        let fresh = captions.dynamicLines(lines, exclude: exclude)
+        guard running, screenMode, !paused else { return }
+        let fresh: [String]
+        if runMode == .camera {
+            // Kamera modunda kullanıcı okuma alanını altyazıya göre seçer; alandaki yazılar altyazıdır
+            // (oyun arayüzündeki sayılar, para, süre gibi yazılar hariç).
+            fresh = lines.map { $0.text }.filter { !CaptionTracker.looksLikeInterface($0) }
+        } else {
+            guard appInBackground else { return }
+            let (o, t) = displayTexts()
+            let exclude = CaptionTracker.normalize(o + " " + t)
+            fresh = captions.dynamicLines(lines, exclude: exclude)
+        }
         guard !fresh.isEmpty else { return }
         let caption = fresh.joined(separator: " ")
         let added = captions.newWords(caption: caption, liveWords: liveWords)
@@ -374,10 +542,18 @@ final class Engine: ObservableObject {
     /// Altyazı alanı ayarında, seçili alanda okunan yazıyı gösterir.
     private func refreshPreviewText() {
         guard let f = previewFrame else { return }
-        reader.recognizeOnce(f, top: settings.ocrTop, bottom: settings.ocrBottom,
-                             sourceLang: settings.sourceLang) { [weak self] lines in
-            let text = lines.map { $0.text }.joined(separator: " ")
-            self?.ocrPreviewText = text.isEmpty ? "(Bu alanda yazı bulunamadı)" : text
+        let area: CGRect
+        if settings.ocrAuto {
+            area = reader.lastDetectedArea ?? CGRect(x: 0, y: 0, width: 1, height: 1)
+        } else {
+            area = ScreenTextReader.band(top: settings.ocrTop, bottom: settings.ocrBottom)
+        }
+        ocrPreviewArea = area
+        reader.recognizeOnce(f, area: area, sourceLang: settings.sourceLang) { [weak self] lines in
+            let text = lines.map { $0.text }
+                .filter { !CaptionTracker.looksLikeInterface($0) }
+                .joined(separator: " ")
+            self?.ocrPreviewText = text.isEmpty ? "(Bu alanda altyazı bulunamadı)" : text
         }
     }
 
@@ -413,7 +589,7 @@ final class Engine: ObservableObject {
         } else if let i = committed.firstIndex(where: { $0.id == seg }), let t = text, !t.isEmpty,
                   t != committed[i].original {
             committed[i].original = t
-            translate(seg)
+            if cfg.translationEnabled { translate(seg) } else { finalize(seg) }
         }
     }
 
@@ -441,13 +617,43 @@ final class Engine: ObservableObject {
             live = Segment(id: nextLocalSegment())
             liveWords = []
         }
-        if !old.original.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        let text = old.original.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !text.isEmpty {
             committed.append(old)
             if committed.count > 40 { committed.removeFirst(committed.count - 40) }
             debounce?.cancel()
-            translate(old.id)
+            if !cfg.translationEnabled || (old.translatedSource == text && !old.translation.isEmpty) {
+                finalize(old.id)
+            } else {
+                translate(old.id)
+            }
         }
         scheduleRender()
+    }
+
+    /// Cümle kesinleşti: geçmişe yaz, seslendir.
+    private func finalize(_ id: Int) {
+        guard let i = segmentIndex(id) else { return }
+        let seg = committed[i]
+        if settings.historyEnabled {
+            if let hid = historyIDs[id] {
+                history.update(hid, original: seg.original, translation: seg.translation)
+            } else {
+                historyIDs[id] = history.add(original: seg.original, translation: seg.translation, source: historySource)
+            }
+        }
+        guard settings.speakEnabled, !paused, !spoken.contains(id) else { return }
+        spoken.insert(id)
+        let useOriginal = settings.speakTarget == .original || !cfg.translationEnabled
+        let text = useOriginal ? seg.original : seg.translation
+        let lang = useOriginal ? cfg.speechSourceLanguage : cfg.speechTargetLanguage
+        speaker.speak(text, language: lang, voiceID: useOriginal ? "" : settings.voiceID,
+                      rate: Float(settings.speechRate))
+    }
+
+    private var historySource: String {
+        if runMode == .camera { return cfg.input == .audio ? "Mikrofon" : "Kamera" }
+        return cfg.input == .audio ? "Ekran sesi" : "Ekran altyazısı"
     }
 
     private func tick() {
@@ -467,7 +673,7 @@ final class Engine: ObservableObject {
             sendCloud(rest)
         }
         if chunker != nil { applyCloud() }
-        if now.timeIntervalSince(lastRender) > 1.0 { renderNow() }
+        if runMode == .screen && now.timeIntervalSince(lastRender) > 1.0 { renderNow() }
     }
 
     // MARK: - Çeviri
@@ -530,6 +736,11 @@ final class Engine: ObservableObject {
                 case .success(let result):
                     self.setTranslation(id, source: raw, translation: result)
                     if self.status.hasPrefix("Çeviri hatası") { self.status = self.connectedStatus }
+                    // Kesinleşmiş cümlenin son hâli çevrildiyse geçmişe yaz ve seslendir.
+                    if id != self.live.id,
+                       self.text(of: id)?.trimmingCharacters(in: .whitespacesAndNewlines) == raw {
+                        self.finalize(id)
+                    }
                     self.scheduleRender()
                 }
                 if self.dirty.remove(id) != nil { self.translate(id) }
@@ -575,8 +786,10 @@ final class Engine: ObservableObject {
         while applySeq < nextSeq {
             if let r = cloudDone.removeValue(forKey: applySeq) {
                 if !r.0.isEmpty || !r.1.isEmpty {
-                    committed.append(Segment(id: 1_000_000 + applySeq, original: r.0, translation: r.1, translatedSource: r.0))
+                    let id = 1_000_000 + applySeq
+                    committed.append(Segment(id: id, original: r.0, translation: r.1, translatedSource: r.0))
                     if committed.count > 40 { committed.removeFirst(committed.count - 40) }
+                    finalize(id)
                     changed = true
                 }
                 applySeq += 1
@@ -620,21 +833,36 @@ final class Engine: ObservableObject {
     func renderNow() {
         lastRender = Date()
         var (o, t) = displayTexts()
+        if shownOriginal != o { shownOriginal = o }
+        if shownTranslation != t { shownTranslation = t }
+        // Kamera modunda kutu uygulamanın içinde gösterilir; PiP kutusu yalnızca ekran modunda.
+        if running && runMode == .camera { return }
         var hint: String?
         if !running {
             o = ""; t = ""
             hint = "Canlı Çeviri\nBaşlat'a dokun"
         } else if o.isEmpty && t.isEmpty {
-            if !audioConnected {
+            if !broadcastConnected {
                 hint = "Ekran yayını bekleniyor…\n“Yayını Başlat”a dokun"
             } else {
                 hint = screenMode ? "📺 Altyazı bekleniyor…" : "🎧 Dinleniyor…"
             }
         }
-        let content = OverlayRenderer.Content(
-            original: o, translation: t, hint: hint, paused: running && paused,
+        if let pb = renderer.render(boxContent(original: o, translation: t, hint: hint)) { pip.enqueue(pb) }
+    }
+
+    /// Ayarlardaki kutu stiliyle içerik oluşturur.
+    func boxContent(original: String, translation: String, hint: String? = nil) -> OverlayRenderer.Content {
+        OverlayRenderer.Content(
+            original: original, translation: translation, hint: hint, paused: running && paused,
             mode: settings.displayMode, lines: settings.lines, fontSize: CGFloat(settings.fontSize),
-            centered: settings.centered, color: settings.textColor)
-        if let pb = renderer.render(content) { pip.enqueue(pb) }
+            centered: settings.centered, color: settings.textColor,
+            background: settings.boxBackground, fontStyle: settings.fontStyle, bold: settings.boldText)
+    }
+
+    /// Ayarlar ekranındaki örnek kutu görüntüsü.
+    func samplePreview() -> UIImage? {
+        renderer.image(boxContent(original: "Hey, welcome back! Today we're exploring the city.",
+                                  translation: "Hey, tekrar hoş geldin! Bugün şehri keşfediyoruz."))
     }
 }

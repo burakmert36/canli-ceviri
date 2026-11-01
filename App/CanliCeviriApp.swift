@@ -7,10 +7,9 @@ struct CanliCeviriApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootView()
                 .environmentObject(engine)
                 .environmentObject(settings)
-                .preferredColorScheme(.dark)
         }
     }
 }

@@ -2,6 +2,7 @@ import UIKit
 import AVKit
 import CoreMedia
 import CoreVideo
+import CoreImage
 import SwiftUI
 
 /// Altyazı kutusunu (siyah zemin) piksel tamponuna çizer.
@@ -23,6 +24,9 @@ final class OverlayRenderer {
         var fontSize: CGFloat
         var centered: Bool
         var color: SubtitleColor
+        var background: BoxBackground = .black
+        var fontStyle: FontStyleChoice = .standard
+        var bold: Bool = true
     }
 
     struct Layout {
@@ -33,9 +37,10 @@ final class OverlayRenderer {
         let secondaryLines: Int
         let height: CGFloat
 
-        init(mode: DisplayMode, lines: Int, fontSize: CGFloat) {
-            mainFont = UIFont.systemFont(ofSize: fontSize, weight: .semibold)
-            secondaryFont = UIFont.systemFont(ofSize: (fontSize * 0.72).rounded(), weight: .regular)
+        init(mode: DisplayMode, lines: Int, fontSize: CGFloat,
+             style: FontStyleChoice = .standard, bold: Bool = true) {
+            mainFont = OverlayRenderer.font(size: fontSize, weight: bold ? .semibold : .regular, style: style)
+            secondaryFont = OverlayRenderer.font(size: (fontSize * 0.72).rounded(), weight: .regular, style: style)
             mainLine = OverlayRenderer.lineHeight(mainFont)
             secondaryLine = OverlayRenderer.lineHeight(secondaryFont)
             secondaryLines = mode == .both ? (lines <= 2 ? 1 : 2) : 0
@@ -46,14 +51,31 @@ final class OverlayRenderer {
     }
 
     /// Kutunun en/boy oranı (önizleme için).
-    static func aspect(mode: DisplayMode, lines: Int, fontSize: CGFloat) -> CGFloat {
-        width / Layout(mode: mode, lines: lines, fontSize: fontSize).height
+    static func aspect(mode: DisplayMode, lines: Int, fontSize: CGFloat,
+                       style: FontStyleChoice = .standard, bold: Bool = true) -> CGFloat {
+        width / Layout(mode: mode, lines: lines, fontSize: fontSize, style: style, bold: bold).height
+    }
+
+    static func font(size: CGFloat, weight: UIFont.Weight, style: FontStyleChoice) -> UIFont {
+        let base = UIFont.systemFont(ofSize: size, weight: weight)
+        guard style != .standard, let d = base.fontDescriptor.withDesign(style.design) else { return base }
+        return UIFont(descriptor: d, size: size)
+    }
+
+    private static let ciContext = CIContext()
+
+    /// Ayarlar ekranındaki önizleme için kutuyu görüntü olarak çizer.
+    func image(_ c: Content) -> UIImage? {
+        guard let pb = render(c) else { return nil }
+        let ci = CIImage(cvPixelBuffer: pb)
+        guard let cg = Self.ciContext.createCGImage(ci, from: ci.extent) else { return nil }
+        return UIImage(cgImage: cg)
     }
 
     static func lineHeight(_ f: UIFont) -> CGFloat { (f.lineHeight * 1.06).rounded() }
 
     func render(_ c: Content) -> CVPixelBuffer? {
-        let layout = Layout(mode: c.mode, lines: c.lines, fontSize: c.fontSize)
+        let layout = Layout(mode: c.mode, lines: c.lines, fontSize: c.fontSize, style: c.fontStyle, bold: c.bold)
         let w = Int(Self.width)
         let h = max(64, (Int(layout.height) + 1) & ~1)
         var pbOut: CVPixelBuffer?
@@ -79,12 +101,12 @@ final class OverlayRenderer {
         UIGraphicsPushContext(ctx)
         defer { UIGraphicsPopContext() }
 
-        ctx.setFillColor(UIColor.black.cgColor)
+        ctx.setFillColor(c.background.uiColor.cgColor)
         ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
 
         let inner = CGRect(x: Self.padH, y: Self.padV,
                            width: CGFloat(w) - Self.padH * 2, height: CGFloat(h) - Self.padV * 2)
-        let mainColor: UIColor = c.color == .yellow ? UIColor(red: 1, green: 0.86, blue: 0.2, alpha: 1) : .white
+        let mainColor: UIColor = c.color.uiColor
         let grey = UIColor(white: 0.62, alpha: 1)
 
         let mainText = c.mode == .original ? c.original : c.translation

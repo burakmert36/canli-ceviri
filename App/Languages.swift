@@ -107,6 +107,18 @@ enum Languages {
         return String(id.split(separator: "-").first ?? Substring(id))
     }
 
+    /// Kaynak ve hedef dili yer değiştirir (ör. İngilizce→Türkçe ⇄ Türkçe→İngilizce).
+    static func swapped(source: String, target: String) -> (source: String, target: String)? {
+        guard source != "auto" else { return nil }
+        let newTarget = googleSource(source)
+        guard Languages.target(newTarget) != nil else { return nil }
+        let prefix = target.split(separator: "-").first.map(String.init) ?? target
+        let newSource = sources.first(where: { $0.id == target })?.id
+            ?? sources.first(where: { $0.id.hasPrefix(prefix + "-") })?.id
+        guard let s = newSource else { return nil }
+        return (s, newTarget)
+    }
+
     /// Apple Translation çerçevesi için dil kimliği.
     static func appleLanguageID(_ id: String) -> String {
         switch id {

@@ -15,18 +15,52 @@ final class ScreenTextReader {
     private let queue = DispatchQueue(label: "canliceviri.ocr", qos: .userInitiated)
     private let lock = NSLock()
     private var busy = false
-    private var band: (top: Double, bottom: Double) = (0, 1)
+    /// Okuma alanı (sol üst köşe başlangıçlı, 0–1)
+    private var area = CGRect(x: 0, y: 0, width: 1, height: 1)
     private var languages: [String]?
+    /// Otomatik video alanı algılama (ekran modu)
+    private var autoArea = false
+    private let motion = MotionRegionDetector()
+    private var detectedArea: CGRect?
 
     /// Okunan satırlar (ana iş parçacığında çağrılır).
     var onResult: (([OCRLine], ScreenFrame) -> Void)?
 
-    func configure(top: Double, bottom: Double, sourceLang: String) {
+    func configure(area: CGRect, auto: Bool, sourceLang: String) {
+        let langs = Self.visionLanguages(for: sourceLang)
         lock.lock()
-        let t = min(max(top, 0), 0.95)
-        band = (t, min(max(bottom, t + 0.05), 1))
-        languages = Self.visionLanguages(for: sourceLang)
+        self.area = Self.clamp(area)
+        if auto != autoArea { detectedArea = nil }
+        autoArea = auto
+        languages = langs
         lock.unlock()
+    }
+
+    /// Otomatik bulunan video alanı (yoksa nil).
+    var lastDetectedArea: CGRect? {
+        lock.lock(); defer { lock.unlock() }
+        return autoArea ? detectedArea : nil
+    }
+
+    /// Yeni oturumda video alanını sıfırdan bul.
+    func resetDetection() {
+        lock.lock(); detectedArea = nil; lock.unlock()
+        queue.async { self.motion.reset() }
+    }
+
+    /// Ekran modu için tam genişlikte yatay şerit.
+    static func band(top: Double, bottom: Double) -> CGRect {
+        let t = min(max(top, 0), 0.95)
+        let b = min(max(bottom, t + 0.05), 1)
+        return CGRect(x: 0, y: t, width: 1, height: b - t)
+    }
+
+    static func clamp(_ r: CGRect) -> CGRect {
+        let x = min(max(r.minX, 0), 0.95)
+        let y = min(max(r.minY, 0), 0.95)
+        let w = min(max(r.width, 0.05), 1 - x)
+        let h = min(max(r.height, 0.05), 1 - y)
+        return CGRect(x: x, y: y, width: w, height: h)
     }
 
     /// Kareyi sıraya koyar; önceki kare hâlâ işleniyorsa atlar.
@@ -34,23 +68,29 @@ final class ScreenTextReader {
         lock.lock()
         if busy { lock.unlock(); return }
         busy = true
-        let b = band, langs = languages
+        let manual = area, langs = languages, auto = autoArea
         lock.unlock()
         queue.async {
-            let lines = Self.recognize(frame, band: b, languages: langs)
+            var target: CGRect? = manual
+            if auto {
+                // Videonun oynadığı (sürekli değişen) bölgeyi bul; başlık, yorum, menü gibi sabit yerleri okuma.
+                let region = self.motion.update(frame)
+                self.lock.lock(); self.detectedArea = region; self.lock.unlock()
+                target = region.map(Self.clamp)
+            }
+            let lines = target.map { Self.recognize(frame, area: $0, languages: langs) } ?? []
             self.lock.lock(); self.busy = false; self.lock.unlock()
             DispatchQueue.main.async { self.onResult?(lines, frame) }
         }
     }
 
     /// Önizleme için tek seferlik okuma (meşguliyetten bağımsız).
-    func recognizeOnce(_ frame: ScreenFrame, top: Double, bottom: Double, sourceLang: String,
+    func recognizeOnce(_ frame: ScreenFrame, area: CGRect, sourceLang: String,
                        completion: @escaping ([OCRLine]) -> Void) {
-        let t = min(max(top, 0), 0.95)
-        let b = (t, min(max(bottom, t + 0.05), 1))
+        let a = Self.clamp(area)
         let langs = Self.visionLanguages(for: sourceLang)
         queue.async {
-            let lines = Self.recognize(frame, band: b, languages: langs)
+            let lines = Self.recognize(frame, area: a, languages: langs)
             DispatchQueue.main.async { completion(lines) }
         }
     }
@@ -66,7 +106,7 @@ final class ScreenTextReader {
         return nil
     }
 
-    private static func recognize(_ f: ScreenFrame, band: (top: Double, bottom: Double), languages: [String]?) -> [OCRLine] {
+    private static func recognize(_ f: ScreenFrame, area: CGRect, languages: [String]?) -> [OCRLine] {
         guard let pb = makePixelBuffer(f) else { return [] }
         let req = VNRecognizeTextRequest()
         req.recognitionLevel = .accurate
@@ -77,8 +117,8 @@ final class ScreenTextReader {
         } else {
             req.automaticallyDetectsLanguage = true
         }
-        // Vision'da y ekseni aşağıdan yukarı: üst sınır → 1 - top
-        req.regionOfInterest = CGRect(x: 0, y: 1 - band.bottom, width: 1, height: band.bottom - band.top)
+        // Vision'da y ekseni aşağıdan yukarıdır.
+        req.regionOfInterest = CGRect(x: area.minX, y: 1 - area.maxY, width: area.width, height: area.height)
         let handler = VNImageRequestHandler(cvPixelBuffer: pb, orientation: f.orientation, options: [:])
         do { try handler.perform([req]) } catch { return [] }
         let observations = req.results ?? []
@@ -138,11 +178,123 @@ final class ScreenTextReader {
     }
 }
 
+/// Ekran karelerinde sürekli değişen (video oynayan) bölgeyi bulur.
+/// Dikey YouTube'da üstteki oynatıcıyı, yatayda tüm ekranı otomatik seçer; sabit arayüz yazıları dışarıda kalır.
+final class MotionRegionDetector {
+    private let columns = 24
+    private var cols = 0, rows = 0
+    private var prev: [Float] = []
+    private var heat: [Float] = []
+    private var key = ""
+    private var lastRegion: CGRect?
+
+    func reset() {
+        prev = []; heat = []; key = ""; lastRegion = nil
+    }
+
+    /// Video bölgesi (sol üst köşe başlangıçlı, 0–1, görüntünün dik hâline göre). Henüz bulunamadıysa nil.
+    func update(_ f: ScreenFrame) -> CGRect? {
+        let k = "\(f.width)x\(f.height)-\(f.orientation.rawValue)"
+        if k != key { reset(); key = k }   // döndürme ya da boyut değişti: baştan öğren
+        let cell = max(4, f.width / columns)
+        let c = f.width / cell, r = f.height / cell
+        guard c > 2, r > 2 else { return lastRegion }
+        var means = [Float](repeating: 0, count: c * r)
+        f.pixels.withUnsafeBytes { (raw: UnsafeRawBufferPointer) in
+            let p = raw.bindMemory(to: UInt8.self)
+            for cy in 0..<r {
+                for cx in 0..<c {
+                    var sum = 0, n = 0
+                    var y = cy * cell
+                    while y < (cy + 1) * cell {
+                        let row = y * f.width
+                        var x = cx * cell
+                        while x < (cx + 1) * cell { sum += Int(p[row + x]); n += 1; x += 2 }
+                        y += 2
+                    }
+                    means[cy * c + cx] = Float(sum) / Float(max(n, 1))
+                }
+            }
+        }
+        guard prev.count == means.count else {
+            prev = means; heat = [Float](repeating: 0, count: means.count); cols = c; rows = r
+            return lastRegion
+        }
+        var active = [Bool](repeating: false, count: means.count)
+        for i in 0..<means.count {
+            let moving = abs(means[i] - prev[i]) > 3
+            heat[i] = heat[i] * 0.93 + (moving ? 1 : 0)
+            active[i] = heat[i] > 0.35
+        }
+        prev = means
+
+        // Bağlı bölgeleri bul.
+        struct Comp { var count = 0; var minX = Int.max; var minY = Int.max; var maxX = -1; var maxY = -1 }
+        var visited = [Bool](repeating: false, count: active.count)
+        var comps: [Comp] = []
+        var stack: [Int] = []
+        for start in 0..<active.count where active[start] && !visited[start] {
+            var comp = Comp()
+            stack.append(start); visited[start] = true
+            while let i = stack.popLast() {
+                let x = i % c, y = i / c
+                comp.count += 1
+                comp.minX = min(comp.minX, x); comp.maxX = max(comp.maxX, x)
+                comp.minY = min(comp.minY, y); comp.maxY = max(comp.maxY, y)
+                let neighbors = [(x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)]
+                for (nx, ny) in neighbors where nx >= 0 && ny >= 0 && nx < c && ny < r {
+                    let j = ny * c + nx
+                    if active[j] && !visited[j] { visited[j] = true; stack.append(j) }
+                }
+            }
+            comps.append(comp)
+        }
+        let minCells = max(6, (c * r) / 50)
+        let big = comps.filter { $0.count >= minCells }.sorted { $0.count > $1.count }
+        guard var main = big.first else { return lastRegion }
+        // Videonun hemen altındaki/üstündeki parçaları (ör. altyazı satırı) birleştir; uzaktaki kutuyu değil.
+        for other in big.dropFirst() {
+            let overlapX = min(main.maxX, other.maxX) - max(main.minX, other.minX) + 1
+            let narrower = min(main.maxX - main.minX, other.maxX - other.minX) + 1
+            let gap = max(other.minY - main.maxY, main.minY - other.maxY)
+            if overlapX * 2 >= narrower && gap <= 4 {
+                main.minX = min(main.minX, other.minX); main.maxX = max(main.maxX, other.maxX)
+                main.minY = min(main.minY, other.minY); main.maxY = max(main.maxY, other.maxY)
+            }
+        }
+        let x0 = max(0, main.minX - 1), x1 = min(c - 1, main.maxX + 1)
+        let y0 = max(0, main.minY - 1), y1 = min(r - 1, main.maxY + 2)
+        let rawRect = CGRect(x: CGFloat(x0) / CGFloat(c), y: CGFloat(y0) / CGFloat(r),
+                             width: CGFloat(x1 - x0 + 1) / CGFloat(c), height: CGFloat(y1 - y0 + 1) / CGFloat(r))
+        let region = Self.oriented(rawRect, f.orientation)
+        lastRegion = region
+        return region
+    }
+
+    /// Ham görüntüdeki dikdörtgeni, görüntü dik çevrildiğindeki konumuna taşır.
+    static func oriented(_ r: CGRect, _ o: CGImagePropertyOrientation) -> CGRect {
+        switch o {
+        case .right, .rightMirrored:
+            return CGRect(x: 1 - r.maxY, y: r.minX, width: r.height, height: r.width)
+        case .left, .leftMirrored:
+            return CGRect(x: r.minY, y: 1 - r.maxX, width: r.height, height: r.width)
+        case .down, .downMirrored:
+            return CGRect(x: 1 - r.maxX, y: 1 - r.maxY, width: r.width, height: r.height)
+        default:
+            return r
+        }
+    }
+}
+
 /// Okunan satırlardan gerçek altyazıyı ayıklar ve kayan (roll-up) altyazıları tek metinde birleştirir.
 final class CaptionTracker {
     private struct Seen { var firstSeen: Date; var lastSeen: Date; var candidate: Bool }
     private var seen: [String: Seen] = [:]
     private var baselinePending = true
+    /// Daha önce görülüp kaybolan yazıların son görülme zamanı (tekrar belirirse arayüz yazısıdır).
+    private var everSeen: [String: Date] = [:]
+    /// Arayüz olduğu anlaşılan yazılar (bölüm adı, düğme vb.) — oturum boyunca yok sayılır.
+    private var uiTexts = Set<String>()
     /// Önceki segmentlerin son kelimeleri (normalleştirilmiş) — kayan altyazı örtüşmesi için.
     private var tail: [String] = []
 
@@ -155,6 +307,8 @@ final class CaptionTracker {
     func resetAll() {
         resetBaseline()
         tail.removeAll()
+        everSeen.removeAll()
+        uiTexts.removeAll()
     }
 
     /// Segment kapandığında son kelimelerini sakla.
@@ -172,6 +326,13 @@ final class CaptionTracker {
             let n = Self.normalize(line.text)
             guard n.count >= 2 else { continue }
             if !exclude.isEmpty && exclude.contains(n) { continue }
+            if uiTexts.contains(n) || Self.looksLikeInterface(line.text) { continue }
+            if seen[n] == nil, let last = everSeen[n], now.timeIntervalSince(last) > 3 {
+                // Kaybolup aynen geri gelen yazı altyazı değil, arayüzdür (bölüm adı, düğme vb.).
+                uiTexts.insert(n)
+                continue
+            }
+            everSeen[n] = now
             if var s = seen[n] {
                 s.lastSeen = now
                 // 12 sn'den uzun ekranda kalan yazı altyazı değildir (başlık, menü vb.)
@@ -185,7 +346,38 @@ final class CaptionTracker {
         }
         // Ekrandan kaybolan yazıları unut (geri gelirse yeniden "yeni" sayılır).
         seen = seen.filter { now.timeIntervalSince($0.value.lastSeen) < 2.5 }
+        if everSeen.count > 2000 { everSeen = everSeen.filter { now.timeIntervalSince($0.value) < 600 } }
         return result
+    }
+
+    private static let interfaceWords: Set<String> = [
+        "görüntüleme", "görüntülenme", "beğeni", "beğenme", "abone", "abonelik", "yorum", "yorumlar",
+        "views", "view", "likes", "subscribers", "subscriber", "comments", "önce", "ago",
+    ]
+    private static let interfaceLabels: Set<String> = [
+        "abone ol", "subscribe", "paylaş", "share", "remix", "indir", "download", "kaydet", "save",
+        "yorumlar", "comments", "shorts", "canlı", "live", "atla", "skip", "skip ad", "reklamı atla",
+        "sponsorlu", "sponsored", "daha fazla", "more", "katıl", "join",
+    ]
+
+    /// YouTube ve benzeri uygulamaların arayüz yazılarına benziyor mu? (süre, @kanal, sayılar, kesik başlık…)
+    static func looksLikeInterface(_ raw: String) -> Bool {
+        let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if t.isEmpty { return true }
+        if t.hasSuffix("…") || t.hasSuffix("...") { return true }        // kesilmiş başlık
+        if t.contains("@") || t.contains("#") { return true }            // kanal adı, etiket
+        if t.lowercased().hasPrefix("http") || t.contains("www.") { return true }
+        let letters = t.unicodeScalars.filter { CharacterSet.letters.contains($0) }.count
+        let digits = t.unicodeScalars.filter { CharacterSet.decimalDigits.contains($0) }.count
+        if letters < 2 { return true }                                    // "2:27 / 18:27", "1,5 B"
+        if digits > 0 && Double(letters) / Double(max(1, t.count)) < 0.45 { return true }
+        let norm = normalize(t)
+        if interfaceLabels.contains(norm) { return true }
+        if digits > 0 {
+            let words = Set(norm.split(separator: " ").map(String.init))
+            if !words.isDisjoint(with: interfaceWords) { return true }   // "70.487 görüntüleme", "7 sa. önce"
+        }
+        return false
     }
 
     /// Mevcut canlı metne eklenecek yeni kelimeleri hesaplar.
