@@ -4,23 +4,58 @@ import CoreMedia
 import CoreVideo
 import SwiftUI
 
-/// Altyazı kutusunu (siyah zemin, beyaz yazı) piksel tamponuna çizer.
+/// Altyazı kutusunu (siyah zemin) piksel tamponuna çizer.
+/// Kutunun genişliği sabittir; yüksekliği seçilen satır sayısına göre hesaplanır.
+/// Böylece kutu "sadece boyuna" (satır sayısı) ve "sadece enine" (yazı boyutu = satıra sığan kelime) ayarlanabilir.
 final class OverlayRenderer {
-    private let width = 1080
+    static let width: CGFloat = 1080
+    static let padH: CGFloat = 30
+    static let padV: CGFloat = 20
+    static let gap: CGFloat = 8
 
     struct Content {
         var original: String
         var translation: String
         var hint: String?
         var paused: Bool
-        var showOriginal: Bool
+        var mode: DisplayMode
+        var lines: Int
         var fontSize: CGFloat
-        var aspect: CGFloat
+        var centered: Bool
+        var color: SubtitleColor
     }
 
+    struct Layout {
+        let mainFont: UIFont
+        let secondaryFont: UIFont
+        let mainLine: CGFloat
+        let secondaryLine: CGFloat
+        let secondaryLines: Int
+        let height: CGFloat
+
+        init(mode: DisplayMode, lines: Int, fontSize: CGFloat) {
+            mainFont = UIFont.systemFont(ofSize: fontSize, weight: .semibold)
+            secondaryFont = UIFont.systemFont(ofSize: (fontSize * 0.72).rounded(), weight: .regular)
+            mainLine = OverlayRenderer.lineHeight(mainFont)
+            secondaryLine = OverlayRenderer.lineHeight(secondaryFont)
+            secondaryLines = mode == .both ? (lines <= 2 ? 1 : 2) : 0
+            var h = OverlayRenderer.padV * 2 + CGFloat(lines) * mainLine
+            if secondaryLines > 0 { h += CGFloat(secondaryLines) * secondaryLine + OverlayRenderer.gap }
+            height = ceil(h)
+        }
+    }
+
+    /// Kutunun en/boy oranı (önizleme için).
+    static func aspect(mode: DisplayMode, lines: Int, fontSize: CGFloat) -> CGFloat {
+        width / Layout(mode: mode, lines: lines, fontSize: fontSize).height
+    }
+
+    static func lineHeight(_ f: UIFont) -> CGFloat { (f.lineHeight * 1.06).rounded() }
+
     func render(_ c: Content) -> CVPixelBuffer? {
-        let w = width
-        let h = max(240, Int((CGFloat(w) / c.aspect).rounded()) & ~1)
+        let layout = Layout(mode: c.mode, lines: c.lines, fontSize: c.fontSize)
+        let w = Int(Self.width)
+        let h = max(64, (Int(layout.height) + 1) & ~1)
         var pbOut: CVPixelBuffer?
         let attrs: [CFString: Any] = [
             kCVPixelBufferIOSurfacePropertiesKey: [:] as CFDictionary,
@@ -47,63 +82,77 @@ final class OverlayRenderer {
         ctx.setFillColor(UIColor.black.cgColor)
         ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
 
-        let pad: CGFloat = 30
-        let inner = CGRect(x: pad, y: pad * 0.8, width: CGFloat(w) - pad * 2, height: CGFloat(h) - pad * 1.6)
+        let inner = CGRect(x: Self.padH, y: Self.padV,
+                           width: CGFloat(w) - Self.padH * 2, height: CGFloat(h) - Self.padV * 2)
+        let mainColor: UIColor = c.color == .yellow ? UIColor(red: 1, green: 0.86, blue: 0.2, alpha: 1) : .white
+        let grey = UIColor(white: 0.62, alpha: 1)
 
-        if let hint = c.hint, c.original.isEmpty, c.translation.isEmpty {
-            let font = UIFont.systemFont(ofSize: c.fontSize * 0.9, weight: .semibold)
-            let p = NSMutableParagraphStyle()
-            p.alignment = .center
-            let s = NSAttributedString(string: hint, attributes: [
-                .font: font, .foregroundColor: UIColor(white: 0.85, alpha: 1), .paragraphStyle: p,
-            ])
-            let b = s.boundingRect(with: CGSize(width: inner.width, height: .greatestFiniteMagnitude),
-                                   options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil)
-            s.draw(with: CGRect(x: inner.minX, y: inner.midY - b.height / 2, width: inner.width, height: b.height),
-                   options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil)
+        let mainText = c.mode == .original ? c.original : c.translation
+        let nothingToShow = mainText.isEmpty && (c.mode != .both || c.original.isEmpty)
+        if let hint = c.hint, nothingToShow {
+            drawHint(hint, maxSize: c.fontSize * 0.85, in: inner)
         } else {
-            let tFont = UIFont.systemFont(ofSize: c.fontSize, weight: .semibold)
-            let oFont = UIFont.systemFont(ofSize: c.fontSize * 0.72, weight: .regular)
-            var transRect = inner
-            if c.showOriginal && !c.original.isEmpty {
-                let oLine = lineHeight(oFont)
-                let tLine = lineHeight(tFont)
-                // Orijinal metne en fazla 2 satır, çeviriye en az 1 satır bırak.
-                let maxOLines = max(1, min(2, Int((inner.height - tLine - 10) / oLine)))
-                let oRect = CGRect(x: inner.minX, y: inner.minY, width: inner.width, height: CGFloat(maxOLines) * oLine)
-                drawTail(c.original, font: oFont, color: UIColor(white: 0.62, alpha: 1), in: oRect, ctx: ctx)
-                let sepY = oRect.maxY + 5
-                transRect = CGRect(x: inner.minX, y: sepY + 5, width: inner.width, height: inner.maxY - sepY - 5)
+            var mainRect = inner
+            if layout.secondaryLines > 0 {
+                let oRect = CGRect(x: inner.minX, y: inner.minY, width: inner.width,
+                                   height: CGFloat(layout.secondaryLines) * layout.secondaryLine)
+                drawTail(c.original, font: layout.secondaryFont, color: grey, in: oRect,
+                         bottomAligned: false, centered: c.centered, ctx: ctx)
+                mainRect = CGRect(x: inner.minX, y: oRect.maxY + Self.gap,
+                                  width: inner.width, height: inner.maxY - oRect.maxY - Self.gap)
             }
-            drawTail(c.translation, font: tFont, color: .white, in: transRect, ctx: ctx)
+            drawTail(mainText, font: layout.mainFont, color: mainColor, in: mainRect,
+                     bottomAligned: c.mode != .both, centered: c.centered, ctx: ctx)
         }
 
         if c.paused {
+            let size = min(34, CGFloat(h) * 0.3)
             let s = NSAttributedString(string: "⏸", attributes: [
-                .font: UIFont.systemFont(ofSize: 34, weight: .bold), .foregroundColor: UIColor.systemYellow,
+                .font: UIFont.systemFont(ofSize: size, weight: .bold), .foregroundColor: UIColor.systemYellow,
             ])
-            s.draw(at: CGPoint(x: CGFloat(w) - 56, y: 8))
+            s.draw(at: CGPoint(x: CGFloat(w) - size - 18, y: 4))
         }
         return pb
     }
 
-    private func lineHeight(_ f: UIFont) -> CGFloat { (f.lineHeight * 1.06).rounded() }
+    /// Bilgi yazısını kutuya sığana kadar küçülterek ortalar.
+    private func drawHint(_ hint: String, maxSize: CGFloat, in rect: CGRect) {
+        let p = NSMutableParagraphStyle()
+        p.alignment = .center
+        var size = maxSize
+        var s = NSAttributedString()
+        var b = CGRect.zero
+        repeat {
+            s = NSAttributedString(string: hint, attributes: [
+                .font: UIFont.systemFont(ofSize: size, weight: .semibold),
+                .foregroundColor: UIColor(white: 0.85, alpha: 1), .paragraphStyle: p,
+            ])
+            b = s.boundingRect(with: CGSize(width: rect.width, height: .greatestFiniteMagnitude),
+                               options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil)
+            size -= 3
+        } while b.height > rect.height && size > 16
+        s.draw(with: CGRect(x: rect.minX, y: rect.midY - b.height / 2, width: rect.width, height: ceil(b.height)),
+               options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil)
+    }
 
     /// Metni kutuya sığdırır; taşarsa en yeni (alttaki) satırlar görünür.
-    private func drawTail(_ text: String, font: UIFont, color: UIColor, in rect: CGRect, ctx: CGContext) {
+    private func drawTail(_ text: String, font: UIFont, color: UIColor, in rect: CGRect,
+                          bottomAligned: Bool, centered: Bool, ctx: CGContext) {
         guard !text.isEmpty, rect.height > 0 else { return }
-        let lh = lineHeight(font)
+        let lh = Self.lineHeight(font)
         let p = NSMutableParagraphStyle()
         p.minimumLineHeight = lh
         p.maximumLineHeight = lh
         p.lineBreakMode = .byWordWrapping
+        p.alignment = centered ? .center : .natural
         let s = NSAttributedString(string: text, attributes: [.font: font, .foregroundColor: color, .paragraphStyle: p])
         let b = s.boundingRect(with: CGSize(width: rect.width, height: .greatestFiniteMagnitude),
                                options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil)
-        let textH = ceil(b.height)
-        let lines = max(1, floor(rect.height / lh))
+        let textH = ceil(b.height / lh) * lh
+        let lines = max(1, floor(rect.height / lh + 0.01))
         let visibleH = lines * lh
-        let y = rect.minY - max(0, textH - visibleH)
+        var y = rect.minY - max(0, textH - visibleH)
+        if bottomAligned && textH < visibleH { y = rect.minY + (visibleH - textH) }
         ctx.saveGState()
         ctx.clip(to: CGRect(x: rect.minX - 4, y: rect.minY, width: rect.width + 8, height: visibleH))
         s.draw(with: CGRect(x: rect.minX, y: y, width: rect.width, height: textH),
@@ -126,6 +175,17 @@ final class PiPManager: NSObject, AVPictureInPictureControllerDelegate, AVPictur
     var onPauseToggled: ((Bool) -> Void)?
     var onStatus: ((String) -> Void)?
     var onActiveChanged: ((Bool) -> Void)?
+    /// Kutudaki ⏩ (true) / ⏪ (false) düğmesine basıldı.
+    var onSkip: ((Bool) -> Void)?
+
+    /// ⏪ ⏩ düğmeleri gösterilsin mi (satır sayısını değiştirmek için).
+    var showsSkipButtons: Bool {
+        get { !(controller?.requiresLinearPlayback ?? true) }
+        set {
+            controller?.requiresLinearPlayback = !newValue
+            controller?.invalidatePlaybackState()
+        }
+    }
 
     override init() {
         super.init()
@@ -245,6 +305,8 @@ final class PiPManager: NSObject, AVPictureInPictureControllerDelegate, AVPictur
 
     func pictureInPictureController(_ c: AVPictureInPictureController, skipByInterval skipInterval: CMTime,
                                     completion completionHandler: @escaping () -> Void) {
+        let seconds = CMTimeGetSeconds(skipInterval)
+        if seconds.isFinite && seconds != 0 { onSkip?(seconds > 0) }
         completionHandler()
     }
 }

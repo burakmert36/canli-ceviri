@@ -28,7 +28,10 @@ final class SampleHandler: RPBroadcastSampleHandler {
 
     override func processSampleBuffer(_ sampleBuffer: CMSampleBuffer,
                                       with sampleBufferType: RPSampleBufferType) {
-        guard sampleBufferType == .audioApp else { return }
-        sender?.process(sampleBuffer)
+        switch sampleBufferType {
+        case .audioApp: sender?.process(sampleBuffer)
+        case .video: sender?.processVideo(sampleBuffer)
+        default: break
+        }
     }
 }

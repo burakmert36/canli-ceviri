@@ -30,6 +30,8 @@ final class AppleRecognizer {
 
     var isAvailable: Bool { recognizer.isAvailable }
 
+    static var isAuthorized: Bool { SFSpeechRecognizer.authorizationStatus() == .authorized }
+
     static func requestAuthorization(_ done: @escaping (Bool) -> Void) {
         if SFSpeechRecognizer.authorizationStatus() == .authorized { done(true); return }
         SFSpeechRecognizer.requestAuthorization { status in

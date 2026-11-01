@@ -1,23 +1,56 @@
 import Foundation
 import Network
+import ImageIO
 
-/// Yayın uzantısından gelen 16 kHz mono Int16 sesi yalnızca 127.0.0.1 üzerinden dinler.
+/// Yayın uzantısından gelen gri tonlamalı ekran karesi.
+struct ScreenFrame {
+    let width: Int
+    let height: Int
+    let orientation: CGImagePropertyOrientation
+    let pixels: Data   // width * height bayt, satır satır
+    let time: Date
+}
+
+/// Yayın uzantısından gelen ses ve görüntüyü yalnızca 127.0.0.1 üzerinden dinler.
+/// Mesaj biçimi: [tür 1 bayt][uzunluk 4 bayt LE][veri] — 'A' ses, 'F' ekran karesi.
 final class AudioReceiver {
     static let port: UInt16 = 47321
+    private static let maxMessage = 16 * 1024 * 1024
 
     /// Ses örnekleri (alıcı kuyruğunda çağrılır).
     var onAudio: (([Int16]) -> Void)?
+    /// Ekran karesi (alıcı kuyruğunda çağrılır).
+    var onFrame: ((ScreenFrame) -> Void)?
     /// Uzantı bağlandı / koptu (alıcı kuyruğunda çağrılır).
     var onConnectionChange: ((Bool) -> Void)?
 
     private let queue = DispatchQueue(label: "canliceviri.receiver")
     private var listener: NWListener?
     private var connection: NWConnection?
-    private var leftover: UInt8?
+    private var buffer = Data()
+    private var wantsVideo = false
 
     /// Dinlemeyi başlatır (zaten dinliyorsa bir şey yapmaz).
     func ensureListening() {
         queue.async { self.startListener() }
+    }
+
+    /// Uzantıdan ekran görüntüsü istenip istenmediğini ayarlar.
+    func setVideoEnabled(_ on: Bool) {
+        queue.async {
+            self.wantsVideo = on
+            self.sendCommand(on ? "V" : "v")
+        }
+    }
+
+    /// Uzantıya "yayını kapat" komutu gönderir.
+    func requestBroadcastStop() {
+        queue.async { self.sendCommand("S") }
+    }
+
+    private func sendCommand(_ c: String) {
+        guard let conn = connection else { return }
+        conn.send(content: Data(c.utf8), completion: .contentProcessed { _ in })
     }
 
     private func startListener() {
@@ -49,15 +82,17 @@ final class AudioReceiver {
     private func accept(_ conn: NWConnection) {
         connection?.cancel()
         connection = conn
-        leftover = nil
+        buffer.removeAll()
         conn.stateUpdateHandler = { [weak self, weak conn] state in
             guard let self = self else { return }
             switch state {
             case .ready:
+                if let c = conn, self.connection === c, self.wantsVideo { self.sendCommand("V") }
                 self.onConnectionChange?(true)
             case .failed, .cancelled:
                 if let c = conn, self.connection === c {
                     self.connection = nil
+                    self.buffer.removeAll()
                     self.onConnectionChange?(false)
                 }
             default: break
@@ -68,10 +103,11 @@ final class AudioReceiver {
     }
 
     private func receive(on conn: NWConnection) {
-        conn.receive(minimumIncompleteLength: 1, maximumLength: 64 * 1024) { [weak self] data, _, isComplete, error in
+        conn.receive(minimumIncompleteLength: 1, maximumLength: 1024 * 1024) { [weak self] data, _, isComplete, error in
             guard let self = self else { return }
             if let data = data, !data.isEmpty, self.connection === conn {
-                self.handle(data)
+                self.buffer.append(data)
+                self.parse()
             }
             if isComplete || error != nil {
                 conn.cancel()
@@ -81,30 +117,49 @@ final class AudioReceiver {
         }
     }
 
-    private func handle(_ data: Data) {
-        var bytes = [UInt8]()
-        bytes.reserveCapacity(data.count + 1)
-        if let l = leftover { bytes.append(l); leftover = nil }
-        bytes.append(contentsOf: data)
-        if bytes.count % 2 == 1 { leftover = bytes.removeLast() }
-        let count = bytes.count / 2
+    private func parse() {
+        var offset = buffer.startIndex
+        while buffer.endIndex - offset >= 5 {
+            let type = buffer[offset]
+            let len = Int(buffer[offset + 1]) | Int(buffer[offset + 2]) << 8
+                | Int(buffer[offset + 3]) << 16 | Int(buffer[offset + 4]) << 24
+            guard len >= 0, len <= Self.maxMessage, type == UInt8(ascii: "A") || type == UInt8(ascii: "F") else {
+                // Bozuk veri: bağlantıyı yeniden kur.
+                buffer.removeAll()
+                connection?.cancel()
+                return
+            }
+            guard buffer.endIndex - offset - 5 >= len else { break }
+            let start = offset + 5
+            let payload = buffer.subdata(in: start..<(start + len))
+            offset = start + len
+            if type == UInt8(ascii: "A") { handleAudio(payload) } else { handleFrame(payload) }
+        }
+        if offset > buffer.startIndex {
+            buffer.removeSubrange(buffer.startIndex..<offset)
+        }
+    }
+
+    private func handleAudio(_ data: Data) {
+        let count = data.count / 2
         guard count > 0 else { return }
         var samples = [Int16](repeating: 0, count: count)
-        for i in 0..<count {
-            samples[i] = Int16(bitPattern: UInt16(bytes[2 * i]) | (UInt16(bytes[2 * i + 1]) << 8))
+        data.withUnsafeBytes { raw in
+            let b = raw.bindMemory(to: UInt8.self)
+            for i in 0..<count {
+                samples[i] = Int16(bitPattern: UInt16(b[2 * i]) | (UInt16(b[2 * i + 1]) << 8))
+            }
         }
         onAudio?(samples)
     }
 
-    /// Uzantıya "yayını kapat" komutu gönderir.
-    func requestBroadcastStop() {
-        queue.async {
-            guard let c = self.connection else { return }
-            c.send(content: Data("S".utf8), completion: .contentProcessed { _ in })
-        }
-    }
-
-    var isConnected: Bool {
-        queue.sync { connection != nil }
+    private func handleFrame(_ data: Data) {
+        guard data.count > 5 else { return }
+        let w = Int(data[data.startIndex]) | Int(data[data.startIndex + 1]) << 8
+        let h = Int(data[data.startIndex + 2]) | Int(data[data.startIndex + 3]) << 8
+        let o = CGImagePropertyOrientation(rawValue: UInt32(data[data.startIndex + 4])) ?? .up
+        guard w > 0, h > 0, data.count - 5 >= w * h else { return }
+        let pixels = data.subdata(in: (data.startIndex + 5)..<(data.startIndex + 5 + w * h))
+        onFrame?(ScreenFrame(width: w, height: h, orientation: o, pixels: pixels, time: Date()))
     }
 }

@@ -29,24 +29,35 @@ enum TranslatorEngine: String, CaseIterable, Identifiable {
     var isLLM: Bool { self == .gemini || self == .openai || self == .claude }
 }
 
-enum BoxShape: String, CaseIterable, Identifiable {
-    case slim, normal, tall
+/// Çevrilecek metin nereden alınacak?
+enum InputSource: String, CaseIterable, Identifiable {
+    case audio, screen
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .slim: return "İnce"
-        case .normal: return "Normal"
-        case .tall: return "Uzun"
+        case .audio: return "Konuşmayı dinle (ses)"
+        case .screen: return "Ekrandaki altyazıyı oku"
         }
     }
-    /// genişlik / yükseklik
-    var aspect: CGFloat {
+}
+
+/// Kutuda ne gösterilecek?
+enum DisplayMode: String, CaseIterable, Identifiable {
+    case both, translation, original
+    var id: String { rawValue }
+    var title: String {
         switch self {
-        case .slim: return 3.2
-        case .normal: return 2.3
-        case .tall: return 1.6
+        case .both: return "Çeviri + orijinal"
+        case .translation: return "Sadece çeviri"
+        case .original: return "Sadece orijinal"
         }
     }
+}
+
+enum SubtitleColor: String, CaseIterable, Identifiable {
+    case white, yellow
+    var id: String { rawValue }
+    var title: String { self == .white ? "Beyaz" : "Sarı" }
 }
 
 /// Tüm ayarlar telefonda (UserDefaults) saklanır; hiçbir yere gönderilmez.
@@ -68,9 +79,18 @@ final class AppSettings: ObservableObject {
     @Published var openaiASRModel: String { didSet { d.set(openaiASRModel, forKey: "openaiASRModel") } }
     @Published var claudeModel: String { didSet { d.set(claudeModel, forKey: "claudeModel") } }
 
+    @Published var inputSource: InputSource { didSet { d.set(inputSource.rawValue, forKey: "inputSource") } }
+    @Published var displayMode: DisplayMode { didSet { d.set(displayMode.rawValue, forKey: "displayMode") } }
+    @Published var lines: Int { didSet { d.set(lines, forKey: "lines") } }
     @Published var fontSize: Double { didSet { d.set(fontSize, forKey: "fontSize") } }
-    @Published var showOriginal: Bool { didSet { d.set(showOriginal, forKey: "showOriginal") } }
-    @Published var boxShape: BoxShape { didSet { d.set(boxShape.rawValue, forKey: "boxShape") } }
+    @Published var centered: Bool { didSet { d.set(centered, forKey: "centered") } }
+    @Published var textColor: SubtitleColor { didSet { d.set(textColor.rawValue, forKey: "textColor") } }
+    @Published var pipButtonsResize: Bool { didSet { d.set(pipButtonsResize, forKey: "pipButtonsResize") } }
+    /// Altyazı okuma alanı (ekran yüksekliğinin oranı, 0 = üst, 1 = alt)
+    @Published var ocrTop: Double { didSet { d.set(ocrTop, forKey: "ocrTop") } }
+    @Published var ocrBottom: Double { didSet { d.set(ocrBottom, forKey: "ocrBottom") } }
+
+    static let linesRange = 1...8
 
     static let defaultGeminiModel = "gemini-3.1-flash-lite"
     static let defaultOpenAIModel = "gpt-5.4-nano"
@@ -89,9 +109,23 @@ final class AppSettings: ObservableObject {
         openaiModel = d.string(forKey: "openaiModel") ?? AppSettings.defaultOpenAIModel
         openaiASRModel = d.string(forKey: "openaiASRModel") ?? AppSettings.defaultOpenAIASRModel
         claudeModel = d.string(forKey: "claudeModel") ?? AppSettings.defaultClaudeModel
+        inputSource = InputSource(rawValue: d.string(forKey: "inputSource") ?? "") ?? .audio
+        // Versiyon 1'deki "orijinali göster" ayarını yeni gösterim moduna taşı.
+        let legacyShowOriginal = d.object(forKey: "showOriginal") as? Bool ?? true
+        displayMode = DisplayMode(rawValue: d.string(forKey: "displayMode") ?? "")
+            ?? (legacyShowOriginal ? .both : .translation)
+        let storedLines = d.object(forKey: "lines") as? Int ?? 3
+        lines = min(max(storedLines, AppSettings.linesRange.lowerBound), AppSettings.linesRange.upperBound)
         fontSize = d.object(forKey: "fontSize") as? Double ?? 58
-        showOriginal = d.object(forKey: "showOriginal") as? Bool ?? true
-        boxShape = BoxShape(rawValue: d.string(forKey: "boxShape") ?? "") ?? .normal
+        centered = d.object(forKey: "centered") as? Bool ?? false
+        textColor = SubtitleColor(rawValue: d.string(forKey: "textColor") ?? "") ?? .white
+        pipButtonsResize = d.object(forKey: "pipButtonsResize") as? Bool ?? true
+        ocrTop = d.object(forKey: "ocrTop") as? Double ?? 0
+        ocrBottom = d.object(forKey: "ocrBottom") as? Double ?? 1
+    }
+
+    func changeLines(by delta: Int) {
+        lines = min(max(lines + delta, AppSettings.linesRange.lowerBound), AppSettings.linesRange.upperBound)
     }
 }
 
@@ -108,12 +142,16 @@ struct EngineConfig {
     var openaiModel: String
     var openaiASRModel: String
     var claudeModel: String
+    var input: InputSource
+    var displayMode: DisplayMode
 
     init(_ s: AppSettings) {
         sourceLang = s.sourceLang
         targetLang = s.targetLang
         asr = s.asr
         translator = s.translator
+        input = s.inputSource
+        displayMode = s.displayMode
         geminiKey = s.geminiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         openaiKey = s.openaiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         claudeKey = s.claudeKey.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -128,6 +166,11 @@ struct EngineConfig {
     }
 
     var sourceIsAuto: Bool { sourceLang == "auto" }
+    /// "Sadece orijinal" modunda hiç çeviri isteği yapılmaz.
+    var translationEnabled: Bool { displayMode != .original }
+    /// Ses modunda Apple tanıma mı kullanılıyor?
+    var usesAppleASR: Bool { input == .audio && asr == .apple }
+    var usesCloudASR: Bool { input == .audio && asr != .apple }
     var sourceEnglishName: String { Languages.source(sourceLang)?.english ?? "the original language" }
     var targetEnglishName: String { Languages.target(targetLang)?.english ?? targetLang }
 }

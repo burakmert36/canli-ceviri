@@ -1,12 +1,21 @@
 import Foundation
 import Network
 import CoreMedia
+import CoreVideo
 import AudioToolbox
+import ReplayKit
 
-/// Yakalanan sesi ana uygulamaya TCP (yalnızca 127.0.0.1) ile akıtır.
-/// Ana uygulama "S" baytı gönderirse yayın kapatılır.
+/// Yakalanan sesi (ve istenirse küçültülmüş gri ekran görüntüsünü) ana uygulamaya
+/// TCP (yalnızca 127.0.0.1) ile akıtır.
+///
+/// Mesaj biçimi: [tür: 1 bayt]['uzunluk: 4 bayt LE][veri]
+///   'A' → 16 kHz mono Int16 LE ses
+///   'F' → [genişlik: UInt16 LE][yükseklik: UInt16 LE][yön: UInt8][gri pikseller]
+/// Uygulamadan gelen tek baytlık komutlar: 'S' yayını kapat, 'V' görüntü gönder, 'v' görüntüyü kes.
 final class AudioSender {
     static let port: UInt16 = 47321
+    static let maxFrameSide = 1300
+    static let frameInterval: TimeInterval = 0.4
 
     var onFinish: ((String) -> Void)?
 
@@ -19,6 +28,12 @@ final class AudioSender {
     private var lastAliveAt = Date()
     private let converter = PCMConverter(outRate: 16000)
     private var watchdog: DispatchSourceTimer?
+
+    // Görüntü durumu (ReplayKit iş parçacığı ile kuyruk arasında paylaşılır)
+    private let videoLock = NSLock()
+    private var videoEnabled = false
+    private var framePending = false
+    private var lastFrameAt = Date.distantPast
 
     func start() {
         queue.async {
@@ -43,10 +58,120 @@ final class AudioSender {
     /// ReplayKit'in kendi iş parçacığında çağrılır (seri).
     func process(_ sampleBuffer: CMSampleBuffer) {
         guard let pcm = converter.convert(sampleBuffer), !pcm.isEmpty else { return }
+        let message = Self.message(type: UInt8(ascii: "A"), payload: pcm)
         queue.async {
             guard self.ready, let conn = self.connection else { return }
-            conn.send(content: pcm, completion: .contentProcessed { _ in })
+            conn.send(content: message, completion: .contentProcessed { _ in })
         }
+    }
+
+    /// Ekran karesi: yalnızca uygulama istediyse, saniyede ~2,5 kez, önceki gönderim bittiyse.
+    func processVideo(_ sampleBuffer: CMSampleBuffer) {
+        videoLock.lock()
+        let wanted = videoEnabled && !framePending && Date().timeIntervalSince(lastFrameAt) >= Self.frameInterval
+        if wanted { framePending = true; lastFrameAt = Date() }
+        videoLock.unlock()
+        guard wanted else { return }
+
+        guard let payload = Self.grayFrame(sampleBuffer) else {
+            videoLock.lock(); framePending = false; videoLock.unlock()
+            return
+        }
+        let message = Self.message(type: UInt8(ascii: "F"), payload: payload)
+        queue.async {
+            guard self.ready, let conn = self.connection else {
+                self.videoLock.lock(); self.framePending = false; self.videoLock.unlock()
+                return
+            }
+            conn.send(content: message, completion: .contentProcessed { [weak self] _ in
+                guard let self = self else { return }
+                self.videoLock.lock(); self.framePending = false; self.videoLock.unlock()
+            })
+        }
+    }
+
+    private func setVideo(_ on: Bool) {
+        videoLock.lock()
+        videoEnabled = on
+        if !on { framePending = false }
+        videoLock.unlock()
+    }
+
+    private static func message(type: UInt8, payload: Data) -> Data {
+        var d = Data(capacity: payload.count + 5)
+        d.append(type)
+        var len = UInt32(payload.count).littleEndian
+        withUnsafeBytes(of: &len) { d.append(contentsOf: $0) }
+        d.append(payload)
+        return d
+    }
+
+    /// Ekran karesinin parlaklık (Y) kanalını en uzun kenarı ~1280 olacak şekilde küçültür.
+    private static func grayFrame(_ sb: CMSampleBuffer) -> Data? {
+        guard let pb = CMSampleBufferGetImageBuffer(sb) else { return nil }
+        CVPixelBufferLockBaseAddress(pb, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(pb, .readOnly) }
+
+        let planar = CVPixelBufferIsPlanar(pb)
+        let format = CVPixelBufferGetPixelFormatType(pb)
+        let w: Int, h: Int, bpr: Int
+        let base: UnsafeMutableRawPointer
+        if planar {
+            guard let b = CVPixelBufferGetBaseAddressOfPlane(pb, 0) else { return nil }
+            base = b
+            w = CVPixelBufferGetWidthOfPlane(pb, 0)
+            h = CVPixelBufferGetHeightOfPlane(pb, 0)
+            bpr = CVPixelBufferGetBytesPerRowOfPlane(pb, 0)
+        } else if format == kCVPixelFormatType_32BGRA {
+            guard let b = CVPixelBufferGetBaseAddress(pb) else { return nil }
+            base = b
+            w = CVPixelBufferGetWidth(pb)
+            h = CVPixelBufferGetHeight(pb)
+            bpr = CVPixelBufferGetBytesPerRow(pb)
+        } else {
+            return nil
+        }
+        guard w > 8, h > 8 else { return nil }
+
+        // Uzun kenar ~1300-2600 piksel arasında kalacak tam sayı küçültme (altyazı yazısı net kalsın).
+        let f = max(1, max(w, h) / maxFrameSide)
+        let ow = w / f, oh = h / f
+        guard ow <= Int(UInt16.max), oh <= Int(UInt16.max) else { return nil }
+
+        var orientation: UInt8 = 1
+        if let n = CMGetAttachment(sb, key: RPVideoSampleOrientationKey as CFString, attachmentModeOut: nil) as? NSNumber {
+            orientation = UInt8(truncatingIfNeeded: n.uint32Value)
+        }
+
+        var out = Data(count: 5 + ow * oh)
+        out.withUnsafeMutableBytes { (raw: UnsafeMutableRawBufferPointer) in
+            guard let o = raw.baseAddress?.assumingMemoryBound(to: UInt8.self) else { return }
+            o[0] = UInt8(ow & 0xff); o[1] = UInt8(ow >> 8)
+            o[2] = UInt8(oh & 0xff); o[3] = UInt8(oh >> 8)
+            o[4] = orientation
+            let px = o + 5
+            let src = base.assumingMemoryBound(to: UInt8.self)
+            let area = f * f
+            for y in 0..<oh {
+                for x in 0..<ow {
+                    var sum = 0
+                    for dy in 0..<f {
+                        let row = src + (y * f + dy) * bpr
+                        for dx in 0..<f {
+                            let sx = x * f + dx
+                            if planar {
+                                sum += Int(row[sx])
+                            } else {
+                                let p = row + sx * 4  // B G R A
+                                sum += (Int(p[0]) * 29 + Int(p[1]) * 150 + Int(p[2]) * 77) >> 8
+                            }
+                        }
+                    }
+                    px[y * ow + x] = UInt8(sum / area)
+                }
+            }
+        }
+        return out
     }
 
     // MARK: - Bağlantı
@@ -84,9 +209,17 @@ final class AudioSender {
     private func receive(on conn: NWConnection) {
         conn.receive(minimumIncompleteLength: 1, maximumLength: 256) { [weak self] data, _, isComplete, error in
             guard let self = self else { return }
-            if let data = data, data.contains(UInt8(ascii: "S")) {
-                self.finish("Canlı çeviri durduruldu.")
-                return
+            if let data = data {
+                for byte in data {
+                    switch byte {
+                    case UInt8(ascii: "S"):
+                        self.finish("Canlı çeviri durduruldu.")
+                        return
+                    case UInt8(ascii: "V"): self.setVideo(true)
+                    case UInt8(ascii: "v"): self.setVideo(false)
+                    default: break
+                    }
+                }
             }
             if isComplete || error != nil {
                 conn.cancel()

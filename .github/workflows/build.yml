@@ -16,10 +16,13 @@ concurrency:
 jobs:
   build:
     runs-on: macos-latest
-    env:
-      VERSION: 1.0.${{ github.run_number }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Sürüm numarası
+        run: |
+          echo "VERSION=$(cat VERSION | tr -d '[:space:]').${{ github.run_number }}" >> "$GITHUB_ENV"
+          echo "MAJOR=$(cut -d. -f1 VERSION | tr -d '[:space:]')" >> "$GITHUB_ENV"
 
       - name: En yeni Xcode'u seç
         run: |
@@ -68,9 +71,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "v$VERSION" out/CanliCeviri.ipa out/sidestore.json \
-            --title "Canlı Çeviri $VERSION" \
-            --notes "iPhone'a yüklemek için CanliCeviri.ipa dosyasını SideStore ile aç." \
+            --title "Canlı Çeviri – Versiyon $MAJOR ($VERSION)" \
+            --notes "Yüklemek için: CanliCeviri.ipa dosyasını iloader (Import IPA) ya da SideStore ile yükle." \
             --latest
+          # Kullanıcının güvenli geri dönüş noktası: ilk çalışan sürüm.
+          gh release edit v1.0.1 --title "Canlı Çeviri – Versiyon 1 (1.0.1) — güvenli yedek" \
+            --notes "YouTube'da çalıştığı doğrulanan ilk sürüm. Sorun olursa bu IPA'yı yükleyerek geri dönebilirsin. Kaynak kod: versiyon-1 dalı." || true
 
       - name: Derleme özetini kaydet
         if: always()

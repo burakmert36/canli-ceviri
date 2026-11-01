@@ -286,7 +286,7 @@ final class TranslationService {
         var original = ""
         switch cfg.asr {
         case .gemini:
-            let both = cfg.translator == .gemini
+            let both = cfg.translationEnabled && cfg.translator == .gemini
             let (o, t) = try await geminiAudio(wav, context: context, translate: both)
             if both { return (o, Self.clean(t)) }
             original = o
@@ -298,6 +298,7 @@ final class TranslationService {
         original = original.trimmingCharacters(in: .whitespacesAndNewlines)
         if Self.isHallucination(original) { return ("", "") }
         guard !original.isEmpty else { return ("", "") }
+        guard cfg.translationEnabled else { return (original, "") }
         let t = try await translate(original, context: context)
         return (original, t)
     }
