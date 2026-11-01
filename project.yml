@@ -4,6 +4,7 @@ options:
   deploymentTarget:
     iOS: "18.0"
   createIntermediateGroups: true
+  developmentLanguage: en
 
 settings:
   base:
@@ -35,7 +36,8 @@ targets:
     info:
       path: App/Info.plist
       properties:
-        CFBundleDisplayName: Canlı Çeviri
+        CFBundleDisplayName: Canli Ceviri
+        CFBundleName: Canli Ceviri
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSRequiresIPhoneOS: true
@@ -60,7 +62,8 @@ targets:
     info:
       path: Broadcast/Info.plist
       properties:
-        CFBundleDisplayName: Canlı Çeviri
+        CFBundleDisplayName: Canli Ceviri
+        CFBundleName: Canli Ceviri Yayin
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
