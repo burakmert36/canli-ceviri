@@ -1,0 +1,6 @@
+build/
+*.xcodeproj/
+App/Info.plist
+Broadcast/Info.plist
+out/
+.DS_Store
