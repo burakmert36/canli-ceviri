@@ -17,18 +17,19 @@ enum ASREngine: String, CaseIterable, Identifiable {
 }
 
 enum TranslatorEngine: String, CaseIterable, Identifiable {
-    case google, apple, gemini, openai, claude
+    case google, apple, appleAI, gemini, openai, claude
     var id: String { rawValue }
     var title: String {
         switch self {
         case .google: return "Google Çeviri (ücretsiz)"
         case .apple: return "Apple Çeviri (cihazda, ücretsiz)"
+        case .appleAI: return "Apple Zekâ (cihazda, ücretsiz)"
         case .gemini: return "Gemini"
         case .openai: return "ChatGPT (OpenAI)"
         case .claude: return "Claude"
         }
     }
-    var isLLM: Bool { self == .gemini || self == .openai || self == .claude }
+    var isLLM: Bool { self == .gemini || self == .openai || self == .claude || self == .appleAI }
 }
 
 /// Çevrilecek metin nereden alınacak?
@@ -248,6 +249,11 @@ final class AppSettings: ObservableObject {
     @Published var voiceID: String { didSet { d.set(voiceID, forKey: "voiceID") } }
     @Published var speechRate: Double { didSet { d.set(speechRate, forKey: "speechRate") } }
 
+    // Performans
+    @Published var batteryMode: BatteryMode { didSet { d.set(batteryMode.rawValue, forKey: "batteryMode") } }
+    /// Cümle bitmeden (konuşurken) çeviriyi güncelle. Kapalıysa yalnızca biten cümleler çevrilir.
+    @Published var liveTranslation: Bool { didSet { d.set(liveTranslation, forKey: "liveTranslation") } }
+
     // Diğer
     @Published var historyEnabled: Bool { didSet { d.set(historyEnabled, forKey: "historyEnabled") } }
     @Published var onboardingDone: Bool { didSet { d.set(onboardingDone, forKey: "onboardingDone") } }
@@ -307,6 +313,8 @@ final class AppSettings: ObservableObject {
         voiceID = d.string(forKey: "voiceID") ?? ""
         speechRate = d.object(forKey: "speechRate") as? Double ?? 0.5
 
+        batteryMode = BatteryMode(rawValue: d.string(forKey: "batteryMode") ?? "") ?? .auto
+        liveTranslation = d.object(forKey: "liveTranslation") as? Bool ?? true
         historyEnabled = d.object(forKey: "historyEnabled") as? Bool ?? true
         onboardingDone = d.object(forKey: "onboardingDone") as? Bool ?? false
     }

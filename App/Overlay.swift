@@ -78,15 +78,7 @@ final class OverlayRenderer {
         let layout = Layout(mode: c.mode, lines: c.lines, fontSize: c.fontSize, style: c.fontStyle, bold: c.bold)
         let w = Int(Self.width)
         let h = max(64, (Int(layout.height) + 1) & ~1)
-        var pbOut: CVPixelBuffer?
-        let attrs: [CFString: Any] = [
-            kCVPixelBufferIOSurfacePropertiesKey: [:] as CFDictionary,
-            kCVPixelBufferCGImageCompatibilityKey: true,
-            kCVPixelBufferCGBitmapContextCompatibilityKey: true,
-        ]
-        guard CVPixelBufferCreate(kCFAllocatorDefault, w, h, kCVPixelFormatType_32BGRA,
-                                  attrs as CFDictionary, &pbOut) == kCVReturnSuccess,
-              let pb = pbOut else { return nil }
+        guard let pb = makeBuffer(width: w, height: h) else { return nil }
         CVPixelBufferLockBaseAddress(pb, [])
         defer { CVPixelBufferUnlockBaseAddress(pb, []) }
         guard let ctx = CGContext(data: CVPixelBufferGetBaseAddress(pb), width: w, height: h,
@@ -135,6 +127,40 @@ final class OverlayRenderer {
             s.draw(at: CGPoint(x: CGFloat(w) - size - 18, y: 4))
         }
         return pb
+    }
+
+    // Tampon havuzu: her çizimde yeni bellek ayırmak yerine tamponlar yeniden kullanılır.
+    private var pool: CVPixelBufferPool?
+    private var poolSize = (0, 0)
+
+    private func makeBuffer(width w: Int, height h: Int) -> CVPixelBuffer? {
+        if pool == nil || poolSize != (w, h) {
+            let attrs: [CFString: Any] = [
+                kCVPixelBufferPixelFormatTypeKey: kCVPixelFormatType_32BGRA,
+                kCVPixelBufferWidthKey: w,
+                kCVPixelBufferHeightKey: h,
+                kCVPixelBufferIOSurfacePropertiesKey: [:] as CFDictionary,
+                kCVPixelBufferCGImageCompatibilityKey: true,
+                kCVPixelBufferCGBitmapContextCompatibilityKey: true,
+            ]
+            var newPool: CVPixelBufferPool?
+            CVPixelBufferPoolCreate(kCFAllocatorDefault, nil, attrs as CFDictionary, &newPool)
+            pool = newPool
+            poolSize = (w, h)
+        }
+        var out: CVPixelBuffer?
+        if let p = pool, CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, p, &out) == kCVReturnSuccess {
+            return out
+        }
+        // Havuz başarısızsa doğrudan oluştur.
+        let attrs: [CFString: Any] = [
+            kCVPixelBufferIOSurfacePropertiesKey: [:] as CFDictionary,
+            kCVPixelBufferCGImageCompatibilityKey: true,
+            kCVPixelBufferCGBitmapContextCompatibilityKey: true,
+        ]
+        guard CVPixelBufferCreate(kCFAllocatorDefault, w, h, kCVPixelFormatType_32BGRA,
+                                  attrs as CFDictionary, &out) == kCVReturnSuccess else { return nil }
+        return out
     }
 
     /// Bilgi yazısını kutuya sığana kadar küçülterek ortalar.

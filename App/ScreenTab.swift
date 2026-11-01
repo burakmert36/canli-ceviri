@@ -140,6 +140,7 @@ struct ScreenTab: View {
     private var captionAreaSection: some View {
         Section {
             Toggle("Altyazının yerini otomatik bul", isOn: $s.ocrAuto)
+            DisclosureGroup("Kontrol et ve ince ayar") {
             if let img = engine.ocrPreview {
                 previewImage(img)
                 if !engine.ocrPreviewText.isEmpty {
@@ -148,6 +149,9 @@ struct ScreenTab: View {
                         Text(engine.ocrPreviewText).font(.footnote)
                     }
                 }
+            } else {
+                Text("Videoyu izlerken bu uygulamaya geri dönersen son ekran ve okunan alan burada görünür.")
+                    .font(.footnote).foregroundStyle(.secondary)
             }
             if !s.ocrAuto {
                 VStack(alignment: .leading) {
@@ -158,6 +162,7 @@ struct ScreenTab: View {
                     Text("Alt sınır: %\(Int(s.ocrBottom * 100))")
                     Slider(value: Binding(get: { s.ocrBottom }, set: { s.ocrBottom = max($0, s.ocrTop + 0.05) }), in: 0.05...1)
                 }
+            }
             }
         } header: {
             Text("Altyazı yeri")
@@ -203,18 +208,13 @@ struct ScreenTab: View {
                 Text("Satır sayısı (kutu boyu): \(s.lines)")
             }
             .disabled(s.boxLocked)
-            VStack(alignment: .leading) {
-                Text("Yazı boyutu (satıra sığan yazı): \(Int(s.fontSize))")
-                Slider(value: $s.fontSize, in: 36...100, step: 2)
-            }
-            .disabled(s.boxLocked)
             Toggle(isOn: $s.boxLocked) {
                 Label("Kutu boyutunu kilitle", systemImage: s.boxLocked ? "lock.fill" : "lock.open")
             }
         } header: {
             Text("Kutu")
         } footer: {
-            Text("Kutunun boyunu “Satır sayısı”, enini “Yazı boyutu” belirler; genel büyüklüğü kutuyu iki parmakla açıp kapatarak ayarlarsın. Kutuyu ekranın altına ya da üstüne sürüklersen iOS onu orada tutar ve bir sonraki açılışta aynı yerde ve boyutta açar. Kilit, boyut ayarlarının ve kutudaki ⏪ ⏩ düğmelerinin yanlışlıkla değişmesini engeller.")
+            Text("Kutunun boyunu “Satır sayısı” belirler (yazı boyutu, renk ve tema: Ayarlar). Genel büyüklüğü iki parmakla ayarla, ekranın altına ya da üstüne sürükle: iOS orada tutar ve sonraki açılışta aynı yerde açar. Kilit, boyutun yanlışlıkla değişmesini engeller.")
         }
     }
 
@@ -222,8 +222,7 @@ struct ScreenTab: View {
         Section {
             Label("Kutuya dokununca çıkan ⏸ ile çeviriyi dondurabilirsin.", systemImage: "pause.circle")
             Label("Kutuyu ✕ ile kapatmak çeviriyi ve ekran yayınını durdurur.", systemImage: "xmark.circle")
-            Label("Kutuyu ekranın kenarına doğru itersen gizlenir; kenardaki oka dokununca geri gelir.", systemImage: "arrow.left.to.line")
-            Label("Apple Music, Netflix gibi korumalı içerikleri iOS yakalatmaz.", systemImage: "lock")
+            Label("Kutuyu kenara itersen gizlenir; kenardaki oka dokununca geri gelir.", systemImage: "arrow.left.to.line")
         } header: {
             Text("İpuçları")
         }

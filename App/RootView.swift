@@ -121,7 +121,10 @@ struct PrimaryButton: View {
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            action()
+        } label: {
             Label(running ? "Durdur" : startTitle, systemImage: running ? "stop.fill" : "play.fill")
                 .font(.headline)
                 .frame(maxWidth: .infinity)

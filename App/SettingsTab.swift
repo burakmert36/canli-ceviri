@@ -7,6 +7,7 @@ struct SettingsTab: View {
     @EnvironmentObject private var s: AppSettings
     @ObservedObject private var updates = UpdateChecker.shared
     @ObservedObject private var history = HistoryStore.shared
+    @ObservedObject private var power = PowerMonitor.shared
     @State private var downloadConfig: TranslationSession.Configuration?
     @State private var showAdvanced = false
     @State private var confirmClearHistory = false
@@ -21,6 +22,7 @@ struct SettingsTab: View {
                 appearanceSection
                 boxSection
                 speechSection
+                performanceSection
                 enginesSection
                 keysSection
                 shortcutsSection
@@ -154,6 +156,37 @@ struct SettingsTab: View {
         }
     }
 
+    // MARK: Performans ve pil
+
+    private var performanceSection: some View {
+        Section {
+            Picker("Pil tasarrufu", selection: $s.batteryMode) {
+                ForEach(BatteryMode.allCases) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            Toggle("Konuşurken de çevir (canlı)", isOn: $s.liveTranslation)
+            HStack {
+                Label("Düşük Güç modu", systemImage: power.lowPowerMode ? "battery.25" : "battery.100")
+                Spacer()
+                Text(power.lowPowerMode ? "Açık" : "Kapalı").foregroundStyle(.secondary)
+            }
+            HStack {
+                Label("Cihaz sıcaklığı", systemImage: "thermometer.medium")
+                Spacer()
+                Text(power.thermalTitle).foregroundStyle(power.isHot ? AnyShapeStyle(Color.orange) : AnyShapeStyle(.secondary))
+            }
+            HStack {
+                Label("Tasarruf şu an", systemImage: "leaf.fill")
+                Spacer()
+                Text(engine.saving ? "Etkin" : "Kapalı").foregroundStyle(engine.saving ? AnyShapeStyle(Color.green) : AnyShapeStyle(.secondary))
+            }
+        } header: {
+            Text("Performans ve pil")
+        } footer: {
+            Text("Uygulama ekranda altyazı yokken okumayı seyrekleştirir, görüntü değişmiyorsa hiç okumaz ve aynı kutuyu tekrar çizmez. Tasarruf etkinken ayrıca: okuma daha seyrek ve hızlı modda yapılır, kamera 10 kare/sn'ye iner, yalnızca biten cümleler çevrilir. “Otomatik”, iPhone Düşük Güç modundayken ya da cihaz ısındığında devreye girer. “Konuşurken de çevir” kapalıysa çeviri cümle bitince gelir: daha az titreme, daha az internet ve pil.")
+        }
+    }
+
     // MARK: Diller ve motorlar
 
     private var enginesSection: some View {
@@ -184,7 +217,7 @@ struct SettingsTab: View {
         } header: {
             Text("Diller ve motorlar")
         } footer: {
-            Text("Ücretsiz olanlar: Apple ses tanıma, Google Çeviri, Apple Çeviri ve altyazı okuma. Gemini / ChatGPT / Claude daha doğal çeviri yapar ama kendi API anahtarınla çalışır. Bulut ses tanıma dili kendisi algılar ve şarkılarda daha iyidir.")
+            Text("Ücretsiz olanlar: Apple ses tanıma, Google Çeviri, Apple Çeviri, Apple Zekâ ve altyazı okuma. Apple Zekâ cihazın kendi yapay zekâsıdır (internetsiz, bağlamı anlar); Ayarlar > Apple Intelligence ve Siri açık olmalı, desteklemediği durumda otomatik Google'a geçer. Gemini / ChatGPT / Claude kendi API anahtarınla çalışır.\(TranslationService.appleIntelligenceAvailable ? "" : "\n\nBu cihazda Apple Zekâ şu an hazır değil.")")
         }
     }
 
@@ -216,6 +249,13 @@ struct SettingsTab: View {
             Label("“Ekranı Çevir”, “Kamera Çevirisi” ve “Çeviriyi Durdur” kısayolları hazır.", systemImage: "bolt.fill")
             Label("iPhone Eylem Düğmesi: Ayarlar → Eylem Düğmesi → Kestirme → Canlı Çeviri → Ekranı Çevir", systemImage: "button.programmable")
             Label("Siri: “Canlı Çeviri ile ekranı çevir”", systemImage: "mic.fill")
+            VStack(alignment: .leading, spacing: 6) {
+                Label("Arkaya iki kez dokun → ekrandaki yazıyı çevir", systemImage: "hand.tap.fill")
+                    .font(.subheadline.weight(.semibold))
+                Text("1) Kestirmeler → + → “Ekran Görüntüsü Al” ekle → “Görüntüdeki Yazıyı Çevir” (Canlı Çeviri) ekle → “Sonucu Göster” ekle.\n2) Ayarlar → Erişilebilirlik → Dokunma → Arkaya Dokunma → İki Kez Dokunma → bu kestirmeyi seç.\nArtık oyun menüsü, manga, mesaj… ne görürsen telefonun arkasına iki kez dokununca Türkçesi çıkar. Ücretsiz ve yayın gerektirmez.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             if let url = URL(string: "shortcuts://") {
                 Link(destination: url) { Label("Kestirmeler uygulamasını aç", systemImage: "square.stack.3d.up") }
             }

@@ -28,18 +28,30 @@ final class AudioReceiver {
     private var listener: NWListener?
     private var connection: NWConnection?
     private var buffer = Data()
-    private var wantsVideo = false
+    private var videoMode: VideoMode = .off
+
+    /// Uzantıdan istenen ekran görüntüsü sıklığı.
+    enum VideoMode {
+        case off, fast, slow
+        var command: String {
+            switch self {
+            case .off: return "v"
+            case .fast: return "V"   // ~2,5 kare/sn (altyazı akarken)
+            case .slow: return "W"   // ~1 kare/sn (altyazı yokken / pil tasarrufunda)
+            }
+        }
+    }
 
     /// Dinlemeyi başlatır (zaten dinliyorsa bir şey yapmaz).
     func ensureListening() {
         queue.async { self.startListener() }
     }
 
-    /// Uzantıdan ekran görüntüsü istenip istenmediğini ayarlar.
-    func setVideoEnabled(_ on: Bool) {
+    /// Uzantıdan ekran görüntüsü istenip istenmediğini ve sıklığını ayarlar.
+    func setVideoMode(_ mode: VideoMode) {
         queue.async {
-            self.wantsVideo = on
-            self.sendCommand(on ? "V" : "v")
+            self.videoMode = mode
+            self.sendCommand(mode.command)
         }
     }
 
@@ -87,7 +99,7 @@ final class AudioReceiver {
             guard let self = self else { return }
             switch state {
             case .ready:
-                if let c = conn, self.connection === c, self.wantsVideo { self.sendCommand("V") }
+                if let c = conn, self.connection === c, self.videoMode != .off { self.sendCommand(self.videoMode.command) }
                 self.onConnectionChange?(true)
             case .failed, .cancelled:
                 if let c = conn, self.connection === c {

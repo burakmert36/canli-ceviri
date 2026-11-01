@@ -11,11 +11,10 @@ import ReplayKit
 /// Mesaj biçimi: [tür: 1 bayt]['uzunluk: 4 bayt LE][veri]
 ///   'A' → 16 kHz mono Int16 LE ses
 ///   'F' → [genişlik: UInt16 LE][yükseklik: UInt16 LE][yön: UInt8][gri pikseller]
-/// Uygulamadan gelen tek baytlık komutlar: 'S' yayını kapat, 'V' görüntü gönder, 'v' görüntüyü kes.
+/// Uygulamadan gelen tek baytlık komutlar: 'S' yayını kapat, 'V' sık görüntü, 'W' seyrek görüntü, 'v' görüntüyü kes.
 final class AudioSender {
     static let port: UInt16 = 47321
     static let maxFrameSide = 1300
-    static let frameInterval: TimeInterval = 0.4
 
     var onFinish: ((String) -> Void)?
 
@@ -34,6 +33,7 @@ final class AudioSender {
     private var videoEnabled = false
     private var framePending = false
     private var lastFrameAt = Date.distantPast
+    private var frameInterval: TimeInterval = 0.4
 
     func start() {
         queue.async {
@@ -68,7 +68,7 @@ final class AudioSender {
     /// Ekran karesi: yalnızca uygulama istediyse, saniyede ~2,5 kez, önceki gönderim bittiyse.
     func processVideo(_ sampleBuffer: CMSampleBuffer) {
         videoLock.lock()
-        let wanted = videoEnabled && !framePending && Date().timeIntervalSince(lastFrameAt) >= Self.frameInterval
+        let wanted = videoEnabled && !framePending && Date().timeIntervalSince(lastFrameAt) >= frameInterval
         if wanted { framePending = true; lastFrameAt = Date() }
         videoLock.unlock()
         guard wanted else { return }
@@ -90,9 +90,10 @@ final class AudioSender {
         }
     }
 
-    private func setVideo(_ on: Bool) {
+    private func setVideo(_ on: Bool, interval: TimeInterval = 0.4) {
         videoLock.lock()
         videoEnabled = on
+        frameInterval = interval
         if !on { framePending = false }
         videoLock.unlock()
     }
@@ -215,7 +216,8 @@ final class AudioSender {
                     case UInt8(ascii: "S"):
                         self.finish("Canlı çeviri durduruldu.")
                         return
-                    case UInt8(ascii: "V"): self.setVideo(true)
+                    case UInt8(ascii: "V"): self.setVideo(true, interval: 0.4)
+                    case UInt8(ascii: "W"): self.setVideo(true, interval: 1.0)
                     case UInt8(ascii: "v"): self.setVideo(false)
                     default: break
                     }

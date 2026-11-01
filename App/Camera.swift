@@ -55,6 +55,7 @@ final class CameraCapture: NSObject, ObservableObject, AVCaptureVideoDataOutputS
             dev.unlockForConfiguration()
         }
         maxZoom = max(1, min(8, dev.activeFormat.videoMaxZoomFactor))
+        setFrameRate(15)
     }
 
     func start() {
@@ -73,6 +74,21 @@ final class CameraCapture: NSObject, ObservableObject, AVCaptureVideoDataOutputS
         queue.async {
             guard (try? d.lockForConfiguration()) != nil else { return }
             d.videoZoomFactor = z
+            d.unlockForConfiguration()
+        }
+    }
+
+    /// Kamera kare hızını sınırlar (daha az ısınma ve pil). Altyazı okumak için 10–15 kare/sn yeterli.
+    func setFrameRate(_ fps: Int) {
+        guard let d = device else { return }
+        queue.async {
+            let supported = d.activeFormat.videoSupportedFrameRateRanges.contains {
+                $0.minFrameRate <= Double(fps) && Double(fps) <= $0.maxFrameRate
+            }
+            guard supported, (try? d.lockForConfiguration()) != nil else { return }
+            let duration = CMTime(value: 1, timescale: CMTimeScale(fps))
+            d.activeVideoMinFrameDuration = duration
+            d.activeVideoMaxFrameDuration = duration
             d.unlockForConfiguration()
         }
     }

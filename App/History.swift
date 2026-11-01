@@ -70,6 +70,36 @@ final class HistoryStore: ObservableObject {
         }.joined(separator: "\n")
     }
 
+    /// Son kesintisiz kaydı döndürür (aralarında 10 dakikadan uzun boşluk olmayan son cümleler).
+    func lastSession() -> [HistoryEntry] {
+        guard var i = entries.indices.last else { return [] }
+        while i > 0 && entries[i].date.timeIntervalSince(entries[i - 1].date) < 600 { i -= 1 }
+        return Array(entries[i...])
+    }
+
+    /// İki dilli SRT altyazı dosyası üretir (çeviri + orijinal).
+    func exportSRT(_ items: [HistoryEntry]) -> URL? {
+        guard let first = items.first else { return nil }
+        func stamp(_ t: TimeInterval) -> String {
+            let ms = Int((t * 1000).rounded())
+            return String(format: "%02d:%02d:%02d,%03d", ms / 3_600_000, (ms / 60_000) % 60, (ms / 1000) % 60, ms % 1000)
+        }
+        var out = ""
+        for (i, e) in items.enumerated() {
+            let start = e.date.timeIntervalSince(first.date)
+            let next = i + 1 < items.count ? items[i + 1].date.timeIntervalSince(first.date) : start + 4
+            let end = max(start + 1, min(next, start + 6))
+            var body = e.translation.isEmpty ? e.original : e.translation
+            if !e.translation.isEmpty && !e.original.isEmpty { body += "\n" + e.original }
+            out += "\(i + 1)\n\(stamp(start)) --> \(stamp(end))\n\(body)\n\n"
+        }
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd_HH-mm"
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("CanliCeviri_\(f.string(from: first.date)).srt")
+        do { try out.write(to: url, atomically: true, encoding: .utf8) } catch { return nil }
+        return url
+    }
+
     private func scheduleSave() {
         saveWork?.cancel()
         let snapshot = entries
@@ -92,6 +122,9 @@ struct HistoryView: View {
     @State private var query = ""
     @State private var confirmClear = false
     @State private var copiedID: UUID?
+    @State private var summary: String?
+    @State private var summarizing = false
+    @State private var showSummary = false
 
     private var filtered: [HistoryEntry] {
         let q = query.trimmingCharacters(in: .whitespaces).lowercased()
@@ -135,8 +168,25 @@ struct HistoryView: View {
             .navigationTitle("Geçmiş")
             .toolbar {
                 if !store.entries.isEmpty {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button {
+                            summarizeLastSession()
+                        } label: {
+                            Label("Özet", systemImage: "sparkles")
+                        }
+                        .disabled(summarizing)
+                    }
                     ToolbarItem(placement: .topBarTrailing) {
-                        ShareLink(item: store.exportText(Array(filtered.reversed()))) {
+                        Menu {
+                            ShareLink(item: store.exportText(Array(filtered.reversed()))) {
+                                Label("Metin olarak paylaş", systemImage: "doc.plaintext")
+                            }
+                            if let url = store.exportSRT(store.lastSession()) {
+                                ShareLink(item: url) {
+                                    Label("Son kaydı SRT altyazı olarak", systemImage: "captions.bubble")
+                                }
+                            }
+                        } label: {
                             Image(systemName: "square.and.arrow.up")
                         }
                     }
@@ -145,9 +195,61 @@ struct HistoryView: View {
                     }
                 }
             }
+            .sheet(isPresented: $showSummary) { summarySheet }
             .confirmationDialog("Tüm geçmiş silinsin mi?", isPresented: $confirmClear, titleVisibility: .visible) {
                 Button("Hepsini sil", role: .destructive) { store.clear() }
                 Button("Vazgeç", role: .cancel) {}
+            }
+        }
+    }
+
+    private var summarySheet: some View {
+        NavigationStack {
+            ScrollView {
+                if summarizing {
+                    VStack(spacing: 12) {
+                        ProgressView()
+                        Text("Özet hazırlanıyor…").foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 60)
+                } else {
+                    Text(summary ?? "")
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding()
+                }
+            }
+            .navigationTitle("Son kaydın özeti")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    if let t = summary, !summarizing {
+                        ShareLink(item: t) { Image(systemName: "square.and.arrow.up") }
+                    }
+                }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Kapat") { showSummary = false }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private func summarizeLastSession() {
+        let items = store.lastSession()
+        guard !items.isEmpty else { return }
+        let transcript = items.map { $0.original.isEmpty ? $0.translation : $0.original }.joined(separator: "\n")
+        summary = nil
+        summarizing = true
+        showSummary = true
+        let svc = TranslationService(config: EngineConfig(AppSettings.shared))
+        Task {
+            let result: String
+            do { result = try await svc.summarize(transcript) } catch { result = error.localizedDescription }
+            await MainActor.run {
+                summary = result
+                summarizing = false
             }
         }
     }

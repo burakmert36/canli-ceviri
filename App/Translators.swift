@@ -1,5 +1,8 @@
 import Foundation
 import Translation
+#if canImport(FoundationModels)
+import FoundationModels
+#endif
 
 enum APIError: LocalizedError {
     case http(Int, String)
@@ -91,6 +94,13 @@ final class TranslationService {
                 if let a = try? await apple(text) { out = a } else { throw error }
             }
         case .apple: out = try await apple(text)
+        case .appleAI:
+            do {
+                out = try await appleIntelligence(text, context: context)
+            } catch {
+                // Cihaz içi model bu dili/içeriği desteklemezse ücretsiz Google'a düş.
+                if let g = try? await google(text) { out = g } else { throw error }
+            }
         case .gemini: out = try await geminiText(text, context: context)
         case .openai: out = try await openAIChat(text, context: context)
         case .claude: out = try await claude(text, context: context)
@@ -164,6 +174,60 @@ final class TranslationService {
                                      target: Languages.appleLanguageID(cfg.targetLang))
     }
 
+    // MARK: Apple Zekâ (cihaz içi yapay zekâ, iOS 26+)
+
+    static var appleIntelligenceAvailable: Bool {
+        #if canImport(FoundationModels)
+        if #available(iOS 26.0, *) {
+            if case .available = SystemLanguageModel.default.availability { return true }
+        }
+        #endif
+        return false
+    }
+
+    private func appleIntelligence(_ text: String, context: [String]) async throws -> String {
+        try await Self.appleIntelligenceRespond(instructions: systemPrompt, prompt: userPrompt(text, context: context))
+    }
+
+    static func appleIntelligenceRespond(instructions: String, prompt: String) async throws -> String {
+        #if canImport(FoundationModels)
+        if #available(iOS 26.0, *) {
+            guard case .available = SystemLanguageModel.default.availability else {
+                throw APIError.unsupported("Apple Zekâ bu cihazda kapalı ya da hazır değil (Ayarlar > Apple Intelligence ve Siri).")
+            }
+            let session = LanguageModelSession(instructions: instructions)
+            let response = try await session.respond(to: prompt)
+            return response.content
+        }
+        #endif
+        throw APIError.unsupported("Apple Zekâ için iOS 26 gerekli")
+    }
+
+    // MARK: Özet (geçmiş için)
+
+    /// Bir kaydın Türkçe özetini çıkarır: önce cihaz içi Apple Zekâ, yoksa anahtarı girilmiş bir yapay zekâ.
+    func summarize(_ transcript: String) async throws -> String {
+        let instructions = "You summarize video transcripts. Always answer in Turkish, as 3-7 short bullet points, then one sentence about the overall topic. No preamble."
+        if Self.appleIntelligenceAvailable {
+            let clipped = String(transcript.suffix(3500))
+            if let r = try? await Self.appleIntelligenceRespond(instructions: instructions, prompt: "Transcript:\n" + clipped) {
+                return r
+            }
+        }
+        let clipped = String(transcript.suffix(20000))
+        let user = "Transcript:\n" + clipped
+        if !cfg.geminiKey.isEmpty {
+            return try await gemini(parts: [["text": user]], system: instructions, json: false)
+        }
+        if !cfg.openaiKey.isEmpty {
+            return try await chatOpenAI(system: instructions, user: user)
+        }
+        if !cfg.claudeKey.isEmpty {
+            return try await chatClaude(system: instructions, user: user)
+        }
+        throw APIError.unsupported("Özet için Apple Zekâ'yı aç ya da Ayarlar'a bir yapay zekâ anahtarı (ör. ücretsiz Gemini) gir.")
+    }
+
     // MARK: Gemini
 
     private func geminiThinking(_ model: String) -> [String: Any]? {
@@ -210,14 +274,18 @@ final class TranslationService {
     // MARK: OpenAI
 
     private func openAIChat(_ text: String, context: [String]) async throws -> String {
+        try await chatOpenAI(system: systemPrompt, user: userPrompt(text, context: context))
+    }
+
+    private func chatOpenAI(system: String, user: String) async throws -> String {
         guard !cfg.openaiKey.isEmpty else { throw APIError.missingKey("OpenAI") }
         let url = URL(string: "https://api.openai.com/v1/chat/completions")!
         let model = cfg.openaiModel
         var body: [String: Any] = [
             "model": model,
             "messages": [
-                ["role": "system", "content": systemPrompt],
-                ["role": "user", "content": userPrompt(text, context: context)],
+                ["role": "system", "content": system],
+                ["role": "user", "content": user],
             ],
         ]
         let m = model.lowercased()
@@ -260,13 +328,17 @@ final class TranslationService {
     // MARK: Claude
 
     private func claude(_ text: String, context: [String]) async throws -> String {
+        try await chatClaude(system: systemPrompt, user: userPrompt(text, context: context))
+    }
+
+    private func chatClaude(system: String, user: String) async throws -> String {
         guard !cfg.claudeKey.isEmpty else { throw APIError.missingKey("Claude") }
         let url = URL(string: "https://api.anthropic.com/v1/messages")!
         let body: [String: Any] = [
             "model": cfg.claudeModel,
             "max_tokens": 1024,
-            "system": systemPrompt,
-            "messages": [["role": "user", "content": userPrompt(text, context: context)]],
+            "system": system,
+            "messages": [["role": "user", "content": user]],
         ]
         let obj = try await HTTP.json(url, headers: [
             "x-api-key": cfg.claudeKey,

@@ -1,6 +1,8 @@
 import Foundation
 import AppIntents
 import SwiftUI
+import Vision
+import UIKit
 
 enum AppTab: Hashable, CaseIterable {
     case screen, camera, history, settings
@@ -67,6 +69,51 @@ struct StopTranslationIntent: AppIntent {
     func perform() async throws -> some IntentResult {
         Engine.shared.stop()
         return .result()
+    }
+}
+
+/// Bir görüntüdeki (ör. ekran görüntüsü) tüm yazıyı okur ve çevirir.
+/// Kestirmeler'de "Ekran Görüntüsü Al" ile birlikte kullanılır; iPhone'un arkasına iki kez dokunarak çalıştırılabilir.
+struct TranslateImageIntent: AppIntent {
+    static let title: LocalizedStringResource = "Görüntüdeki Yazıyı Çevir"
+    static let openAppWhenRun: Bool = false
+
+    @Parameter(title: "Görüntü")
+    var image: IntentFile
+
+    func perform() async throws -> some IntentResult & ReturnsValue<String> & ProvidesDialog {
+        let text = try ImageTextReader.read(image.data)
+        guard !text.isEmpty else {
+            return .result(value: "", dialog: "Görüntüde okunabilir yazı bulunamadı.")
+        }
+        var cfg = EngineConfig(AppSettings.shared)
+        cfg.sourceLang = "auto"   // görüntüdeki dil önceden bilinmez
+        if cfg.translator == .apple { cfg.translator = .google }
+        let translated = try await TranslationService(config: cfg).translate(text, context: [])
+        return .result(value: translated, dialog: "\(translated)")
+    }
+}
+
+/// Tek bir görüntüdeki yazıları yukarıdan aşağıya okur (durum çubuğu saati, pil yüzdesi gibi yazılar elenir).
+enum ImageTextReader {
+    static func read(_ data: Data) throws -> String {
+        guard let img = UIImage(data: data), let cg = img.cgImage else {
+            throw APIError.unsupported("Görüntü açılamadı")
+        }
+        let req = VNRecognizeTextRequest()
+        req.recognitionLevel = .accurate
+        req.usesLanguageCorrection = true
+        req.automaticallyDetectsLanguage = true
+        let handler = VNImageRequestHandler(cgImage: cg, orientation: .up, options: [:])
+        try handler.perform([req])
+        let lines = (req.results ?? [])
+            .sorted { a, b in
+                if abs(a.boundingBox.midY - b.boundingBox.midY) > 0.01 { return a.boundingBox.midY > b.boundingBox.midY }
+                return a.boundingBox.minX < b.boundingBox.minX
+            }
+            .compactMap { $0.topCandidates(1).first?.string }
+            .filter { !CaptionTracker.looksLikeInterface($0) || $0.count > 40 }
+        return lines.joined(separator: "\n")
     }
 }
 

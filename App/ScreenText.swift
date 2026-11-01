@@ -22,17 +22,26 @@ final class ScreenTextReader {
     private var autoArea = false
     private let motion = MotionRegionDetector()
     private var detectedArea: CGRect?
+    /// Pil tasarrufunda hızlı (daha az enerji harcayan) tanıma seviyesi
+    private var fast = false
+    // Yalnızca OCR kuyruğunda kullanılır: değişmeyen kareyi tekrar okumamak için.
+    private var lastSignature: [Float] = []
+    private var lastOCRAt = Date.distantPast
 
     /// Okunan satırlar (ana iş parçacığında çağrılır).
     var onResult: (([OCRLine], ScreenFrame) -> Void)?
 
-    func configure(area: CGRect, auto: Bool, sourceLang: String) {
-        let langs = Self.visionLanguages(for: sourceLang)
+    func configure(area: CGRect, auto: Bool, sourceLang: String, fast wantsFast: Bool = false) {
+        // Hızlı seviye yalnızca bazı Latin alfabeli dilleri destekler; desteklemiyorsa doğru seviyede kal.
+        let fastLangs = wantsFast ? Self.visionLanguages(for: sourceLang, level: .fast) : nil
+        let useFast = wantsFast && (sourceLang == "auto" ? false : fastLangs != nil)
+        let langs = useFast ? fastLangs : Self.visionLanguages(for: sourceLang, level: .accurate)
         lock.lock()
         self.area = Self.clamp(area)
         if auto != autoArea { detectedArea = nil }
         autoArea = auto
         languages = langs
+        fast = useFast
         lock.unlock()
     }
 
@@ -68,7 +77,7 @@ final class ScreenTextReader {
         lock.lock()
         if busy { lock.unlock(); return }
         busy = true
-        let manual = area, langs = languages, auto = autoArea
+        let manual = area, langs = languages, auto = autoArea, useFast = fast
         lock.unlock()
         queue.async {
             var target: CGRect? = manual
@@ -78,7 +87,18 @@ final class ScreenTextReader {
                 self.lock.lock(); self.detectedArea = region; self.lock.unlock()
                 target = region.map(Self.clamp)
             }
-            let lines = target.map { Self.recognize(frame, area: $0, languages: langs) } ?? []
+            var lines: [OCRLine] = []
+            if let t = target {
+                // Okuma alanı bir önceki okumadan beri neredeyse hiç değişmediyse (durdurulmuş video,
+                // aynı altyazı) yazı tanımayı atla: pil ve işlemci tasarrufu.
+                let sig = Self.signature(frame, area: t)
+                let unchanged = Self.similar(sig, self.lastSignature) && Date().timeIntervalSince(self.lastOCRAt) < 3
+                if !unchanged {
+                    lines = Self.recognize(frame, area: t, languages: langs, fast: useFast)
+                    self.lastSignature = sig
+                    self.lastOCRAt = Date()
+                }
+            }
             self.lock.lock(); self.busy = false; self.lock.unlock()
             DispatchQueue.main.async { self.onResult?(lines, frame) }
         }
@@ -90,15 +110,50 @@ final class ScreenTextReader {
         let a = Self.clamp(area)
         let langs = Self.visionLanguages(for: sourceLang)
         queue.async {
-            let lines = Self.recognize(frame, area: a, languages: langs)
+            let lines = Self.recognize(frame, area: a, languages: langs, fast: false)
             DispatchQueue.main.async { completion(lines) }
         }
     }
 
-    private static func visionLanguages(for source: String) -> [String]? {
+    /// Okuma alanının kaba parlaklık haritası (16×8).
+    private static func signature(_ f: ScreenFrame, area: CGRect) -> [Float] {
+        let raw = MotionRegionDetector.raw(fromOriented: area, f.orientation)
+        let x0 = Int(raw.minX * CGFloat(f.width)), y0 = Int(raw.minY * CGFloat(f.height))
+        let w = max(16, Int(raw.width * CGFloat(f.width))), h = max(8, Int(raw.height * CGFloat(f.height)))
+        let gx = 16, gy = 8
+        var out = [Float](repeating: 0, count: gx * gy)
+        f.pixels.withUnsafeBytes { (buf: UnsafeRawBufferPointer) in
+            let p = buf.bindMemory(to: UInt8.self)
+            for cy in 0..<gy {
+                for cx in 0..<gx {
+                    var sum = 0, n = 0
+                    let sx = x0 + cx * w / gx, ex = x0 + (cx + 1) * w / gx
+                    let sy = y0 + cy * h / gy, ey = y0 + (cy + 1) * h / gy
+                    var y = sy
+                    while y < ey && y < f.height {
+                        var x = sx
+                        while x < ex && x < f.width { sum += Int(p[y * f.width + x]); n += 1; x += 3 }
+                        y += 3
+                    }
+                    out[cy * gx + cx] = Float(sum) / Float(max(n, 1))
+                }
+            }
+        }
+        return out
+    }
+
+    private static func similar(_ a: [Float], _ b: [Float]) -> Bool {
+        guard a.count == b.count, !a.isEmpty else { return false }
+        var diff: Float = 0
+        for i in 0..<a.count { diff += abs(a[i] - b[i]) }
+        return diff / Float(a.count) < 1.5
+    }
+
+    private static func visionLanguages(for source: String,
+                                        level: VNRequestTextRecognitionLevel = .accurate) -> [String]? {
         guard source != "auto" else { return nil }
         let req = VNRecognizeTextRequest()
-        req.recognitionLevel = .accurate
+        req.recognitionLevel = level
         let supported = (try? req.supportedRecognitionLanguages()) ?? []
         let lang = source.split(separator: "-").first.map(String.init) ?? source
         if supported.contains(source) { return [source] }
@@ -106,10 +161,10 @@ final class ScreenTextReader {
         return nil
     }
 
-    private static func recognize(_ f: ScreenFrame, area: CGRect, languages: [String]?) -> [OCRLine] {
+    private static func recognize(_ f: ScreenFrame, area: CGRect, languages: [String]?, fast: Bool) -> [OCRLine] {
         guard let pb = makePixelBuffer(f) else { return [] }
         let req = VNRecognizeTextRequest()
-        req.recognitionLevel = .accurate
+        req.recognitionLevel = fast ? .fast : .accurate
         req.usesLanguageCorrection = true
         req.minimumTextHeight = 0.012
         if let l = languages {
@@ -269,6 +324,20 @@ final class MotionRegionDetector {
         let region = Self.oriented(rawRect, f.orientation)
         lastRegion = region
         return region
+    }
+
+    /// `oriented` işleminin tersi: dik görüntüdeki dikdörtgeni ham görüntüye taşır.
+    static func raw(fromOriented o: CGRect, _ orientation: CGImagePropertyOrientation) -> CGRect {
+        switch orientation {
+        case .right, .rightMirrored:
+            return CGRect(x: o.minY, y: 1 - o.minX - o.width, width: o.height, height: o.width)
+        case .left, .leftMirrored:
+            return CGRect(x: 1 - o.minY - o.height, y: o.minX, width: o.height, height: o.width)
+        case .down, .downMirrored:
+            return CGRect(x: 1 - o.maxX, y: 1 - o.maxY, width: o.width, height: o.height)
+        default:
+            return o
+        }
     }
 
     /// Ham görüntüdeki dikdörtgeni, görüntü dik çevrildiğindeki konumuna taşır.
