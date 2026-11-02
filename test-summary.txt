@@ -1,0 +1,98 @@
+=== CANLI ÇEVİRİ TEST RAPORU ===
+Cihaz: iPhone_17 (iOS_26.2)
+Xcode 26.3
+Build version 17C529
+ProductVersion:		15.7.9
+
+--- Birim, stres ve uçtan uca testler ---
+  Sonuç: Failed  toplam=118 geçti=117 kaldı=1 atlandı=0
+  ✗ 28: XCTAssertTrue failed - orijinal:  | çeviri:  | durum: Bu cihaz Resim içinde Resim desteklemiyor | günlük: 18:11:49.353  Başlat (ekran modu) ¦ 18:11:49.791  uzantı bilgisi: v=test;up=1;rc=0;drop=0 ¦ 18:11:55.360  ekran yönü değişti → yatay ¦ 18:11:55.760  Durdur ¦ 18:11:56.082  uzantı bağlantısı kapandı ¦ 18:11:56.941  uzantı bağlandı ¦ 18:11:57.007  Başlat (ekran modu) ¦ 18:11:57.440  uzantı bilgi
+  En uzun süren testler:
+    testScreenCaptionsAreReadTranslatedAndShown(): 53s
+    testAutoModeReadsInsideDetectedVideo(): 41s
+    testRenderStressMemoryStaysFlat(): 22s
+    testRandomFramesStress(): 18s
+    testSenderBackPressureWhenReceiverStalls(): 16s
+    testFrameFloodKeepsMemoryAndStaysResponsive(): 13s
+    testHeartbeatKeepsConnectionAliveAndReportsPeerInfo(): 9s
+    testSettingsChurnWhileRunning(): 9s
+  Ölçümler:
+    testPerformanceOfLongRollUp — Time, seconds: ort. 0.266
+    testConcurrentAddsFromMainAreSafe — Time, seconds: ort. 0.490
+    testRenderPerformance — Time, seconds: ort. 0.186
+  Bellek ölçümleri:
+    8 sn kare yağmuru (356 kare) +3.6 MB (sınır 60 MB)
+    40 kez başlat/durdur +15.3 MB (sınır 80 MB)
+    4 GB uzunluk iddiası +0.0 MB (sınır 50 MB)
+    3000 kutu çizimi +12.9 MB (sınır 60 MB)
+    uzantı: alıcı okumazken 5 dk ses +1.0 MB (sınır 30 MB)
+
+--- Arayüz, döndürme ve maymun testleri ---
+  Sonuç: Passed  toplam=10 geçti=10 kaldı=0 atlandı=0
+  En uzun süren testler:
+    testMonkey(): 3m 10s
+    testEnginePickerAndProviderSheets(): 3m 3s
+    testAreaPickerInteractions(): 2m 58s
+    testTabCyclingStress(): 1m 16s
+    testMemoryWhileUsingTabs(): 1m 13s
+    testLaunchPerformance(): 1m 6s
+    testRotationStress(): 1m 6s
+    testCameraModeOnDeviceWithoutCamera(): 58s
+  Ölçümler:
+    testLaunchPerformance — Duration (AppLaunch), s: ort. 6.590
+    testMemoryWhileUsingTabs — Memory Physical (app), kB: ort. 353.621
+    testMemoryWhileUsingTabs — Absolute Memory Physical (app), kB: ort. 75001.856
+    testMemoryWhileUsingTabs — CPU Time (app), s: ort. 3.570
+    testMemoryWhileUsingTabs — CPU Cycles (app), kC: ort. 0.000
+    testMemoryWhileUsingTabs — Memory Peak Physical (app), kB: ort. 75681.792
+    testMemoryWhileUsingTabs — CPU Instructions Retired (app), kI: ort. 0.000
+
+--- Thread Sanitizer (eşzamanlılık) ---
+  Sonuç: Failed  toplam=117 geçti=116 kaldı=1 atlandı=0
+  ✗ 28: XCTAssertTrue failed - orijinal:  | çeviri:  | durum: Bu cihaz Resim içinde Resim desteklemiyor | günlük: 18:39:19.866  Başlat (ekran modu) ¦ 18:39:20.254  uzantı bilgisi: v=test;up=1;rc=0;drop=0 ¦ 18:39:30.858  ekran yönü değişti → yatay ¦ 18:39:31.288  Durdur ¦ 18:39:31.610  uzantı bağlantısı kapandı ¦ 18:39:32.475  uzantı bağlandı ¦ 18:39:32.586  Başlat (ekran modu) ¦ 18:39:32.971  uzantı bilgi
+  En uzun süren testler:
+    testAutoModeReadsInsideDetectedVideo(): 1m 6s
+    testScreenCaptionsAreReadTranslatedAndShown(): 53s
+    testSenderBackPressureWhenReceiverStalls(): 41s
+    testRenderStressMemoryStaysFlat(): 34s
+    testFuzzRandomFormatsNeverCrash(): 23s
+    testRotationLockedLandscapeIsDetectedAndRead(): 15s
+    testSpeakerBacklogStressEndsIdle(): 14s
+    testFrameFloodKeepsMemoryAndStaysResponsive(): 13s
+  Sanitizer bulgusu yok.
+  Ölçümler:
+    testPerformanceOfLongRollUp — Time, seconds: ort. 0.820
+    testConcurrentAddsFromMainAreSafe — Time, seconds: ort. 0.645
+    testRenderPerformance — Time, seconds: ort. 0.264
+  Bellek ölçümleri:
+    8 sn kare yağmuru (307 kare) +29.9 MB (sınır 180 MB)
+    40 kez başlat/durdur +15.5 MB (sınır 240 MB)
+    4 GB uzunluk iddiası +0.0 MB (sınır 150 MB)
+    3000 kutu çizimi +25.6 MB (sınır 180 MB)
+    uzantı: alıcı okumazken 5 dk ses +7.0 MB (sınır 90 MB)
+
+--- Address Sanitizer (bellek) ---
+  Sonuç: Failed  toplam=118 geçti=117 kaldı=1 atlandı=0
+  ✗ 28: XCTAssertTrue failed - orijinal:  | çeviri:  | durum: Bu cihaz Resim içinde Resim desteklemiyor | günlük: 18:50:59.960  Başlat (ekran modu) ¦ 18:51:00.342  uzantı bilgisi: v=test;up=1;rc=0;drop=0 ¦ 18:51:09.342  ekran yönü değişti → yatay ¦ 18:51:09.802  Durdur ¦ 18:51:10.127  uzantı bağlantısı kapandı ¦ 18:51:10.985  uzantı bağlandı ¦ 18:51:11.085  Başlat (ekran modu) ¦ 18:51:11.482  uzantı bilgi
+  En uzun süren testler:
+    testAutoModeReadsInsideDetectedVideo(): 58s
+    testScreenCaptionsAreReadTranslatedAndShown(): 54s
+    testRenderStressMemoryStaysFlat(): 44s
+    testSenderBackPressureWhenReceiverStalls(): 33s
+    testFuzzRandomFormatsNeverCrash(): 30s
+    testRandomFramesStress(): 25s
+    testRotationLockedLandscapeIsDetectedAndRead(): 15s
+    testFrameFloodKeepsMemoryAndStaysResponsive(): 13s
+  Sanitizer bulgusu yok.
+  Ölçümler:
+    testPerformanceOfLongRollUp — Time, seconds: ort. 0.770
+    testConcurrentAddsFromMainAreSafe — Time, seconds: ort. 0.463
+    testRenderPerformance — Time, seconds: ort. 0.424
+  Bellek ölçümleri:
+    8 sn kare yağmuru (340 kare) +-9.4 MB (sınır 120 MB)
+    40 kez başlat/durdur +31.8 MB (sınır 160 MB)
+    4 GB uzunluk iddiası +0.0 MB (sınır 100 MB)
+    3000 kutu çizimi +6.9 MB (sınır 120 MB)
+    uzantı: alıcı okumazken 5 dk ses +0.8 MB (sınır 60 MB)
+
+SONUÇ: SORUN VAR

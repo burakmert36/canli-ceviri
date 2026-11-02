@@ -1,0 +1,150 @@
+	 Executed 12 tests, with 0 failures (0 unexpected) in 42.804 (42.878) seconds
+Test Suite 'RendererTests' started at 2026-11-02 18:56:08.881.
+Test Case '-[CanliCeviriTests.RendererTests testAllStyleCombinationsRender]' started.
+Test Case '-[CanliCeviriTests.RendererTests testAllStyleCombinationsRender]' passed (0.936 seconds).
+Test Case '-[CanliCeviriTests.RendererTests testAspectIsPositiveAndFinite]' started.
+Test Case '-[CanliCeviriTests.RendererTests testAspectIsPositiveAndFinite]' passed (0.020 seconds).
+Test Case '-[CanliCeviriTests.RendererTests testExtremeTextsRender]' started.
+Test Case '-[CanliCeviriTests.RendererTests testExtremeTextsRender]' passed (0.914 seconds).
+Test Case '-[CanliCeviriTests.RendererTests testFontSizeExtremes]' started.
+Test Case '-[CanliCeviriTests.RendererTests testFontSizeExtremes]' passed (0.134 seconds).
+Test Case '-[CanliCeviriTests.RendererTests testPiPEnqueueStress]' started.
+Test Case '-[CanliCeviriTests.RendererTests testPiPEnqueueStress]' passed (3.848 seconds).
+Test Case '-[CanliCeviriTests.RendererTests testRenderPerformance]' started.
+/Users/runner/work/canli-ceviri/canli-ceviri/Tests/Unit/RendererTests.swift:86: Test Case '-[CanliCeviriTests.RendererTests testRenderPerformance]' measured [Time, seconds] average: 0.424, relative standard deviation: 14.150%, values: [0.310688, 0.329057, 0.456276, 0.399074, 0.481788, 0.443732, 0.403065, 0.441742, 0.469666, 0.500387], performanceMetricID:com.apple.XCTPerformanceMetric_WallClockTime, baselineName: "", baselineAverage: , polarity: prefers smaller, maxPercentRegression: 10.000%, maxPercentRelativeStandardDeviation: 10.000%, maxRegression: 0.100, maxStandardDeviation: 0.100
+Test Case '-[CanliCeviriTests.RendererTests testRenderPerformance]' passed (4.677 seconds).
+Test Case '-[CanliCeviriTests.RendererTests testRenderStressMemoryStaysFlat]' started.
+2026-11-02 18:56:38.949175+0000 CanliCeviri[12270:277947] [AMCP]          HALC_ProxyIOContext.cpp:1623  HALC_ProxyIOContext::IOWorkLoop: skipping cycle due to overload
+BELLEK: 3000 kutu çizimi +6.9 MB (sınır 120 MB)
+Test Case '-[CanliCeviriTests.RendererTests testRenderStressMemoryStaysFlat]' passed (44.428 seconds).
+Test Suite 'RendererTests' passed at 2026-11-02 18:57:03.880.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 54.957 (54.999) seconds
+Test Suite 'SenderReceiverTests' started at 2026-11-02 18:57:03.882.
+Test Case '-[CanliCeviriTests.SenderReceiverTests testAudioAndVideoFlowEndToEnd]' started.
+2026-11-02 18:57:03.893037+0000 CanliCeviri[12270:298090] [] nw_listener_socket_inbox_create_socket setsockopt SO_NECP_LISTENUUID failed [2: No such file or directory]
+Test Case '-[CanliCeviriTests.SenderReceiverTests testAudioAndVideoFlowEndToEnd]' passed (10.603 seconds).
+Test Case '-[CanliCeviriTests.SenderReceiverTests testBGRAFrameConversion]' started.
+Test Case '-[CanliCeviriTests.SenderReceiverTests testBGRAFrameConversion]' passed (0.847 seconds).
+Test Case '-[CanliCeviriTests.SenderReceiverTests testSenderBackPressureWhenReceiverStalls]' started.
+BELLEK: uzantı: alıcı okumazken 5 dk ses +0.8 MB (sınır 60 MB)
+2026-11-02 18:57:47.874966+0000 CanliCeviri[12270:298079] [connection] [C228 127.0.0.1:47419 tcp, attribution: developer] is already cancelled, ignoring cancel
+2026-11-02 18:57:48.445500+0000 CanliCeviri[12270:298090] [connection] nw_socket_handle_socket_event [C228:1] Socket SO_ERROR [54: Connection reset by peer]
+Test Case '-[CanliCeviriTests.SenderReceiverTests testSenderBackPressureWhenReceiverStalls]' passed (33.110 seconds).
+Test Case '-[CanliCeviriTests.SenderReceiverTests testSenderDetectsUnresponsiveApp]' started.
+2026-11-02 18:57:53.462202+0000 CanliCeviri[12270:298090] [connection] [C229 127.0.0.1:47420 tcp, attribution: developer] is already cancelled, ignoring cancel
+2026-11-02 18:57:53.983718+0000 CanliCeviri[12270:298090] [connection] [C230 127.0.0.1:47420 tcp, attribution: developer] is already cancelled, ignoring cancel
+Test Case '-[CanliCeviriTests.SenderReceiverTests testSenderDetectsUnresponsiveApp]' passed (5.833 seconds).
+Test Case '-[CanliCeviriTests.SenderReceiverTests testSenderReconnectsAfterReceiverRestart]' started.
+2026-11-02 18:57:54.297920+0000 CanliCeviri[12270:297885] [] nw_listener_socket_inbox_create_socket setsockopt SO_NECP_LISTENUUID failed [2: No such file or directory]
+2026-11-02 18:57:54.318844+0000 CanliCeviri[12270:297885] [connection] [C232 127.0.0.1:52640 tcp, local: 127.0.0.1:47421, definite, attribution: developer, server, prohibit joining protocols] is already cancelled, ignoring cancel
+2026-11-02 18:57:54.836096+0000 CanliCeviri[12270:298090] [connection] nw_socket_handle_socket_event [C233:1] Socket SO_ERROR [61: Connection refused]
+2026-11-02 18:57:54.836871+0000 CanliCeviri[12270:298090] [connection] nw_endpoint_flow_failed_with_error [C233 127.0.0.1:47421 in_progress socket-flow (satisfied (Path is satisfied), interface: lo0)] already failing, returning
+2026-11-02 18:57:55.344325+0000 CanliCeviri[12270:298090] [connection] nw_socket_handle_socket_event [C234:1] Socket SO_ERROR [61: Connection refused]
+2026-11-02 18:57:55.345541+0000 CanliCeviri[12270:298090] [connection] nw_endpoint_flow_failed_with_error [C234 127.0.0.1:47421 in_progress socket-flow (satisfied (Path is satisfied), interface: lo0)] already failing, returning
+2026-11-02 18:57:55.820928+0000 CanliCeviri[12270:298090] [] nw_listener_socket_inbox_create_socket setsockopt SO_NECP_LISTENUUID failed [2: No such file or directory]
+Test Case '-[CanliCeviriTests.SenderReceiverTests testSenderReconnectsAfterReceiverRestart]' passed (1.872 seconds).
+Test Suite 'SenderReceiverTests' passed at 2026-11-02 18:57:56.164.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 52.265 (52.282) seconds
+Test Suite 'SettingsTests' started at 2026-11-02 18:57:56.166.
+Test Case '-[CanliCeviriTests.SettingsTests testAreasPersistAsNumbers]' started.
+Test Case '-[CanliCeviriTests.SettingsTests testAreasPersistAsNumbers]' passed (0.017 seconds).
+Test Case '-[CanliCeviriTests.SettingsTests testCorruptStoredPairsAreIgnored]' started.
+Test Case '-[CanliCeviriTests.SettingsTests testCorruptStoredPairsAreIgnored]' passed (0.019 seconds).
+Test Case '-[CanliCeviriTests.SettingsTests testCycleGoesThroughPairsAndWraps]' started.
+Test Case '-[CanliCeviriTests.SettingsTests testCycleGoesThroughPairsAndWraps]' passed (0.029 seconds).
+Test Case '-[CanliCeviriTests.SettingsTests testCycleSkipsAutoWhenAppleSpeechInUse]' started.
+Test Case '-[CanliCeviriTests.SettingsTests testCycleSkipsAutoWhenAppleSpeechInUse]' passed (0.021 seconds).
+Test Case '-[CanliCeviriTests.SettingsTests testEngineConfigFallsBackToDefaultModels]' started.
+Test Case '-[CanliCeviriTests.SettingsTests testEngineConfigFallsBackToDefaultModels]' passed (0.018 seconds).
+Test Case '-[CanliCeviriTests.SettingsTests testHybridOnlyForAIEngines]' started.
+Test Case '-[CanliCeviriTests.SettingsTests testHybridOnlyForAIEngines]' passed (0.009 seconds).
+Test Case '-[CanliCeviriTests.SettingsTests testLanguageTablesAreConsistent]' started.
+Test Case '-[CanliCeviriTests.SettingsTests testLanguageTablesAreConsistent]' passed (0.216 seconds).
+Test Case '-[CanliCeviriTests.SettingsTests testLinesClampAndLock]' started.
+Test Case '-[CanliCeviriTests.SettingsTests testLinesClampAndLock]' passed (0.016 seconds).
+Test Case '-[CanliCeviriTests.SettingsTests testPiPButtonVisibility]' started.
+Test Case '-[CanliCeviriTests.SettingsTests testPiPButtonVisibility]' passed (0.016 seconds).
+Test Case '-[CanliCeviriTests.SettingsTests testPresetsProduceValidConfigs]' started.
+Test Case '-[CanliCeviriTests.SettingsTests testPresetsProduceValidConfigs]' passed (0.022 seconds).
+Test Case '-[CanliCeviriTests.SettingsTests testRememberPairKeepsUniqueNewestFirstMaxFive]' started.
+Test Case '-[CanliCeviriTests.SettingsTests testRememberPairKeepsUniqueNewestFirstMaxFive]' passed (0.037 seconds).
+Test Suite 'SettingsTests' passed at 2026-11-02 18:57:56.625.
+	 Executed 11 tests, with 0 failures (0 unexpected) in 0.420 (0.458) seconds
+Test Suite 'TranslatorTests' started at 2026-11-02 18:57:56.627.
+Test Case '-[CanliCeviriTests.TranslatorTests testCacheAvoidsRepeatedRequests]' started.
+Test Case '-[CanliCeviriTests.TranslatorTests testCacheAvoidsRepeatedRequests]' passed (0.162 seconds).
+Test Case '-[CanliCeviriTests.TranslatorTests testCacheCapacityAndThreadSafety]' started.
+Test Case '-[CanliCeviriTests.TranslatorTests testCacheCapacityAndThreadSafety]' passed (0.087 seconds).
+Test Case '-[CanliCeviriTests.TranslatorTests testClaudeParsesTextBlocks]' started.
+Test Case '-[CanliCeviriTests.TranslatorTests testClaudeParsesTextBlocks]' passed (0.043 seconds).
+Test Case '-[CanliCeviriTests.TranslatorTests testCleanAndHallucinationFilters]' started.
+Test Case '-[CanliCeviriTests.TranslatorTests testCleanAndHallucinationFilters]' passed (0.009 seconds).
+Test Case '-[CanliCeviriTests.TranslatorTests testConcurrentTranslationsStress]' started.
+Test Case '-[CanliCeviriTests.TranslatorTests testConcurrentTranslationsStress]' passed (0.614 seconds).
+Test Case '-[CanliCeviriTests.TranslatorTests testFastPathUsesGoogleEvenWhenAIIsSelected]' started.
+Test Case '-[CanliCeviriTests.TranslatorTests testFastPathUsesGoogleEvenWhenAIIsSelected]' passed (0.011 seconds).
+Test Case '-[CanliCeviriTests.TranslatorTests testGeminiAudioJSONInCodeFence]' started.
+Test Case '-[CanliCeviriTests.TranslatorTests testGeminiAudioJSONInCodeFence]' passed (0.039 seconds).
+Test Case '-[CanliCeviriTests.TranslatorTests testGeminiPromptCarriesContextAndContentKind]' started.
+Test Case '-[CanliCeviriTests.TranslatorTests testGeminiPromptCarriesContextAndContentKind]' passed (0.015 seconds).
+Test Case '-[CanliCeviriTests.TranslatorTests testGeminiRetriesWithoutThinkingConfigOn400]' started.
+Test Case '-[CanliCeviriTests.TranslatorTests testGeminiRetriesWithoutThinkingConfigOn400]' passed (0.020 seconds).
+Test Case '-[CanliCeviriTests.TranslatorTests testGoogleEncodesSpecialCharacters]' started.
+Test Case '-[CanliCeviriTests.TranslatorTests testGoogleEncodesSpecialCharacters]' passed (0.013 seconds).
+Test Case '-[CanliCeviriTests.TranslatorTests testGoogleGarbageResponseThrowsCleanly]' started.
+2026-11-02 18:57:57.706543+0000 CanliCeviri[12270:326055] [TextAPI] Delegate says translation isn't supported on the current device, showing error to the user
+2026-11-02 18:57:57.707614+0000 CanliCeviri[12270:326055] [TextAPI] Translation isn't supported on the current device and the user was informed, returning error to the client: Error Domain=TranslationErrorDomain Code=11 "(null)" UserInfo={sourceLocale=<_NSSwiftLocale: 0x10012fde12b0>, targetLocale=<_NSSwiftLocale: 0x10012f736760>}
+2026-11-02 18:57:57.709381+0000 CanliCeviri[12270:326055] [TextAPI] Failed to determine all preflight information, won't proceed with translation: Error Domain=TranslationErrorDomain Code=11 "(null)" UserInfo={sourceLocale=<_NSSwiftLocale: 0x10012fde12b0>, targetLocale=<_NSSwiftLocale: 0x10012f736760>}
+2026-11-02 18:57:57.745340+0000 CanliCeviri[12270:322722] [TextAPI] Delegate says translation isn't supported on the current device, showing error to the user
+2026-11-02 18:57:57.747769+0000 CanliCeviri[12270:322722] [TextAPI] Translation isn't supported on the current device and the user was informed, returning error to the client: Error Domain=TranslationErrorDomain Code=11 "(null)" UserInfo={sourceLocale=<_NSSwiftLocale: 0x10012fde12b0>, targetLocale=<_NSSwiftLocale: 0x10012f736760>}
+2026-11-02 18:57:57.768964+0000 CanliCeviri[12270:322722] [TextAPI] Failed to determine all preflight information, won't proceed with translation: Error Domain=TranslationErrorDomain Code=11 "(null)" UserInfo={sourceLocale=<_NSSwiftLocale: 0x10012fde12b0>, targetLocale=<_NSSwiftLocale: 0x10012f736760>}
+2026-11-02 18:57:57.794166+0000 CanliCeviri[12270:322722] [TextAPI] Delegate says translation isn't supported on the current device, showing error to the user
+2026-11-02 18:57:57.797974+0000 CanliCeviri[12270:322722] [TextAPI] Translation isn't supported on the current device and the user was informed, returning error to the client: Error Domain=TranslationErrorDomain Code=11 "(null)" UserInfo={sourceLocale=<_NSSwiftLocale: 0x10012fde12b0>, targetLocale=<_NSSwiftLocale: 0x10012f736760>}
+2026-11-02 18:57:57.835685+0000 CanliCeviri[12270:322722] [TextAPI] Failed to determine all preflight information, won't proceed with translation: Error Domain=TranslationErrorDomain Code=11 "(null)" UserInfo={sourceLocale=<_NSSwiftLocale: 0x10012fde12b0>, targetLocale=<_NSSwiftLocale: 0x10012f736760>}
+2026-11-02 18:57:57.860445+0000 CanliCeviri[12270:311500] [TextAPI] Delegate says translation isn't supported on the current device, showing error to the user
+2026-11-02 18:57:57.861517+0000 CanliCeviri[12270:311500] [TextAPI] Translation isn't supported on the current device and the user was informed, returning error to the client: Error Domain=TranslationErrorDomain Code=11 "(null)" UserInfo={sourceLocale=<_NSSwiftLocale: 0x10012fde12b0>, targetLocale=<_NSSwiftLocale: 0x10012f736760>}
+2026-11-02 18:57:57.861973+0000 CanliCeviri[12270:311500] [TextAPI] Failed to determine all preflight information, won't proceed with translation: Error Domain=TranslationErrorDomain Code=11 "(null)" UserInfo={sourceLocale=<_NSSwiftLocale: 0x10012fde12b0>, targetLocale=<_NSSwiftLocale: 0x10012f736760>}
+Test Case '-[CanliCeviriTests.TranslatorTests testGoogleGarbageResponseThrowsCleanly]' passed (0.191 seconds).
+Test Case '-[CanliCeviriTests.TranslatorTests testGoogleParsesMultiPartResponse]' started.
+Test Case '-[CanliCeviriTests.TranslatorTests testGoogleParsesMultiPartResponse]' passed (0.014 seconds).
+Test Case '-[CanliCeviriTests.TranslatorTests testHTTPErrorsAreReadable]' started.
+Test Case '-[CanliCeviriTests.TranslatorTests testHTTPErrorsAreReadable]' passed (0.035 seconds).
+Test Case '-[CanliCeviriTests.TranslatorTests testNetworkFailureIsReported]' started.
+2026-11-02 18:57:57.940442+0000 CanliCeviri[12270:322722] [Default] Task <084233E1-20ED-418A-BBE8-8C1A7F35E7E0>.<1> finished with error [-1001] Error Domain=NSURLErrorDomain Code=-1001 "(null)" UserInfo={_NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalDataTask <084233E1-20ED-418A-BBE8-8C1A7F35E7E0>.<1>"
+), _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <084233E1-20ED-418A-BBE8-8C1A7F35E7E0>.<1>}
+Test Case '-[CanliCeviriTests.TranslatorTests testNetworkFailureIsReported]' passed (0.019 seconds).
+Test Case '-[CanliCeviriTests.TranslatorTests testOfflineNeverHitsNetwork]' started.
+2026-11-02 18:57:57.972091+0000 CanliCeviri[12270:298090] [TextAPI] Delegate says translation isn't supported on the current device, showing error to the user
+2026-11-02 18:57:57.972950+0000 CanliCeviri[12270:298090] [TextAPI] Translation isn't supported on the current device and the user was informed, returning error to the client: Error Domain=TranslationErrorDomain Code=11 "(null)" UserInfo={sourceLocale=<_NSSwiftLocale: 0x10012fde12b0>, targetLocale=<_NSSwiftLocale: 0x10012f736760>}
+2026-11-02 18:57:58.077256+0000 CanliCeviri[12270:298090] [TextAPI] Failed to determine all preflight information, won't proceed with translation: Error Domain=TranslationErrorDomain Code=11 "(null)" UserInfo={sourceLocale=<_NSSwiftLocale: 0x10012fde12b0>, targetLocale=<_NSSwiftLocale: 0x10012f736760>}
+2026-11-02 18:57:58.099005+0000 CanliCeviri[12270:322722] [TextAPI] Delegate says translation isn't supported on the current device, showing error to the user
+2026-11-02 18:57:58.099782+0000 CanliCeviri[12270:322722] [TextAPI] Translation isn't supported on the current device and the user was informed, returning error to the client: Error Domain=TranslationErrorDomain Code=11 "(null)" UserInfo={sourceLocale=<_NSSwiftLocale: 0x10012fde12b0>, targetLocale=<_NSSwiftLocale: 0x10012f736760>}
+2026-11-02 18:57:58.100243+0000 CanliCeviri[12270:322722] [TextAPI] Failed to determine all preflight information, won't proceed with translation: Error Domain=TranslationErrorDomain Code=11 "(null)" UserInfo={sourceLocale=<_NSSwiftLocale: 0x10012fde12b0>, targetLocale=<_NSSwiftLocale: 0x10012f736760>}
+2026-11-02 18:57:58.128848+0000 CanliCeviri[12270:298090] [TextAPI] Delegate says translation isn't supported on the current device, showing error to the user
+2026-11-02 18:57:58.129792+0000 CanliCeviri[12270:298090] [TextAPI] Translation isn't supported on the current device and the user was informed, returning error to the client: Error Domain=TranslationErrorDomain Code=11 "(null)" UserInfo={sourceLocale=<_NSSwiftLocale: 0x10012fde12b0>, targetLocale=<_NSSwiftLocale: 0x10012f736760>}
+2026-11-02 18:57:58.133057+0000 CanliCeviri[12270:298090] [TextAPI] Failed to determine all preflight information, won't proceed with translation: Error Domain=TranslationErrorDomain Code=11 "(null)" UserInfo={sourceLocale=<_NSSwiftLocale: 0x10012fde12b0>, targetLocale=<_NSSwiftLocale: 0x10012f736760>}
+2026-11-02 18:57:58.154401+0000 CanliCeviri[12270:298090] [TextAPI] Delegate says translation isn't supported on the current device, showing error to the user
+2026-11-02 18:57:58.156048+0000 CanliCeviri[12270:298090] [TextAPI] Translation isn't supported on the current device and the user was informed, returning error to the client: Error Domain=TranslationErrorDomain Code=11 "(null)" UserInfo={sourceLocale=<_NSSwiftLocale: 0x10012fde12b0>, targetLocale=<_NSSwiftLocale: 0x10012f736760>}
+2026-11-02 18:57:58.157073+0000 CanliCeviri[12270:298090] [TextAPI] Failed to determine all preflight information, won't proceed with translation: Error Domain=TranslationErrorDomain Code=11 "(null)" UserInfo={sourceLocale=<_NSSwiftLocale: 0x10012fde12b0>, targetLocale=<_NSSwiftLocale: 0x10012f736760>}
+Test Case '-[CanliCeviriTests.TranslatorTests testOfflineNeverHitsNetwork]' passed (0.214 seconds).
+Test Case '-[CanliCeviriTests.TranslatorTests testOpenAIRetriesWithoutReasoningEffort]' started.
+Test Case '-[CanliCeviriTests.TranslatorTests testOpenAIRetriesWithoutReasoningEffort]' passed (0.026 seconds).
+Test Case '-[CanliCeviriTests.TranslatorTests testVersionCompare]' started.
+Test Case '-[CanliCeviriTests.TranslatorTests testVersionCompare]' passed (0.010 seconds).
+Test Suite 'TranslatorTests' passed at 2026-11-02 18:57:58.212.
+	 Executed 17 tests, with 0 failures (0 unexpected) in 1.521 (1.584) seconds
+Test Suite 'CanliCeviriTests.xctest' failed at 2026-11-02 18:57:58.215.
+	 Executed 118 tests, with 2 failures (0 unexpected) in 509.861 (510.349) seconds
+Test Suite 'All tests' failed at 2026-11-02 18:57:58.219.
+	 Executed 118 tests, with 2 failures (0 unexpected) in 509.861 (510.354) seconds
+2026-11-02 18:58:48.177 xcodebuild[6251:261802] [MT] IDETestOperationsObserverDebug: 579.358 elapsed -- Testing started completed.
+2026-11-02 18:58:48.177 xcodebuild[6251:261802] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-11-02 18:58:48.177 xcodebuild[6251:261802] [MT] IDETestOperationsObserverDebug: 579.358 sec, +579.358 sec -- end
+
+Test session results, code coverage, and logs:
+	/Users/runner/work/canli-ceviri/canli-ceviri/results/asan.xcresult
+
+** TEST FAILED **
+
+Testing started

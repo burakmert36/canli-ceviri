@@ -1,0 +1,150 @@
+    t =    44.51s     Wait for com.canliceviri.app to idle
+    t =    44.57s Waiting 5.0s for "Ekran" Button to exist
+    t =    45.59s     Checking `Expect predicate `existsNoRetry == 1` for object "Ekran" Button`
+    t =    45.59s         Checking existence of `"Ekran" Button`
+    t =    45.64s Tap "Ekran" Button
+    t =    45.64s     Wait for com.canliceviri.app to idle
+    t =    45.65s     Find the "Ekran" Button
+    t =    45.70s     Check for interrupting elements affecting "Ekran" Button
+    t =    46.10s     Synthesize event
+    t =    46.45s     Wait for com.canliceviri.app to idle
+    t =    46.49s Waiting 5.0s for "Kamera" Button to exist
+    t =    47.49s     Checking `Expect predicate `existsNoRetry == 1` for object "Kamera" Button`
+    t =    47.49s         Checking existence of `"Kamera" Button`
+    t =    47.56s Tap "Kamera" Button
+    t =    47.56s     Wait for com.canliceviri.app to idle
+    t =    47.57s     Find the "Kamera" Button
+    t =    47.63s     Check for interrupting elements affecting "Kamera" Button
+    t =    48.01s     Synthesize event
+    t =    48.38s     Wait for com.canliceviri.app to idle
+    t =    48.42s Waiting 5.0s for "Geçmiş" Button to exist
+    t =    49.46s     Checking `Expect predicate `existsNoRetry == 1` for object "Geçmiş" Button`
+    t =    49.46s         Checking existence of `"Geçmiş" Button`
+    t =    49.54s Tap "Geçmiş" Button
+    t =    49.54s     Wait for com.canliceviri.app to idle
+    t =    49.55s     Find the "Geçmiş" Button
+    t =    49.63s     Check for interrupting elements affecting "Geçmiş" Button
+    t =    50.11s     Synthesize event
+    t =    50.46s     Wait for com.canliceviri.app to idle
+    t =    50.49s Waiting 5.0s for "Ayarlar" Button to exist
+    t =    51.50s     Checking `Expect predicate `existsNoRetry == 1` for object "Ayarlar" Button`
+    t =    51.50s         Checking existence of `"Ayarlar" Button`
+    t =    51.57s Tap "Ayarlar" Button
+    t =    51.57s     Wait for com.canliceviri.app to idle
+    t =    51.59s     Find the "Ayarlar" Button
+    t =    51.66s     Check for interrupting elements affecting "Ayarlar" Button
+    t =    52.08s     Synthesize event
+    t =    52.45s     Wait for com.canliceviri.app to idle
+    t =    52.48s Waiting 5.0s for "Ekran" Button to exist
+    t =    53.49s     Checking `Expect predicate `existsNoRetry == 1` for object "Ekran" Button`
+    t =    53.49s         Checking existence of `"Ekran" Button`
+    t =    53.55s Tap "Ekran" Button
+    t =    53.55s     Wait for com.canliceviri.app to idle
+    t =    53.56s     Find the "Ekran" Button
+    t =    53.61s     Check for interrupting elements affecting "Ekran" Button
+    t =    54.04s     Synthesize event
+    t =    54.39s     Wait for com.canliceviri.app to idle
+    t =    54.43s Waiting 5.0s for "Kamera" Button to exist
+    t =    55.48s     Checking `Expect predicate `existsNoRetry == 1` for object "Kamera" Button`
+    t =    55.48s         Checking existence of `"Kamera" Button`
+    t =    55.54s Tap "Kamera" Button
+    t =    55.54s     Wait for com.canliceviri.app to idle
+    t =    55.55s     Find the "Kamera" Button
+    t =    55.60s     Check for interrupting elements affecting "Kamera" Button
+    t =    55.98s     Synthesize event
+    t =    56.33s     Wait for com.canliceviri.app to idle
+    t =    56.37s Checking existence of `Alert (First Match)`
+    t =    57.02s Waiting 5.0s for "Geçmiş" Button to exist
+    t =    58.03s     Checking `Expect predicate `existsNoRetry == 1` for object "Geçmiş" Button`
+    t =    58.03s         Checking existence of `"Geçmiş" Button`
+    t =    58.11s Tap "Geçmiş" Button
+    t =    58.11s     Wait for com.canliceviri.app to idle
+    t =    58.14s     Find the "Geçmiş" Button
+    t =    58.28s     Check for interrupting elements affecting "Geçmiş" Button
+    t =    58.89s     Synthesize event
+    t =    59.25s     Wait for com.canliceviri.app to idle
+    t =    59.27s Waiting 5.0s for "Ayarlar" Button to exist
+    t =    60.29s     Checking `Expect predicate `existsNoRetry == 1` for object "Ayarlar" Button`
+    t =    60.29s         Checking existence of `"Ayarlar" Button`
+    t =    60.37s Tap "Ayarlar" Button
+    t =    60.37s     Wait for com.canliceviri.app to idle
+    t =    60.39s     Find the "Ayarlar" Button
+    t =    60.47s     Check for interrupting elements affecting "Ayarlar" Button
+    t =    60.96s     Synthesize event
+    t =    61.33s     Wait for com.canliceviri.app to idle
+    t =    61.43s Waiting 5.0s for "Ekran" Button to exist
+    t =    62.43s     Checking `Expect predicate `existsNoRetry == 1` for object "Ekran" Button`
+    t =    62.44s         Checking existence of `"Ekran" Button`
+    t =    62.49s Tap "Ekran" Button
+    t =    62.49s     Wait for com.canliceviri.app to idle
+    t =    62.50s     Find the "Ekran" Button
+    t =    62.56s     Check for interrupting elements affecting "Ekran" Button
+    t =    63.00s     Synthesize event
+    t =    63.38s     Wait for com.canliceviri.app to idle
+    t =    63.40s Waiting 5.0s for "Kamera" Button to exist
+    t =    64.43s     Checking `Expect predicate `existsNoRetry == 1` for object "Kamera" Button`
+    t =    64.43s         Checking existence of `"Kamera" Button`
+    t =    64.49s Tap "Kamera" Button
+    t =    64.49s     Wait for com.canliceviri.app to idle
+    t =    64.50s     Find the "Kamera" Button
+    t =    64.55s     Check for interrupting elements affecting "Kamera" Button
+    t =    64.99s     Synthesize event
+    t =    65.35s     Wait for com.canliceviri.app to idle
+    t =    65.42s Waiting 5.0s for "Geçmiş" Button to exist
+    t =    66.45s     Checking `Expect predicate `existsNoRetry == 1` for object "Geçmiş" Button`
+    t =    66.45s         Checking existence of `"Geçmiş" Button`
+    t =    66.52s Tap "Geçmiş" Button
+    t =    66.53s     Wait for com.canliceviri.app to idle
+    t =    66.54s     Find the "Geçmiş" Button
+    t =    66.62s     Check for interrupting elements affecting "Geçmiş" Button
+    t =    67.18s     Synthesize event
+    t =    67.54s     Wait for com.canliceviri.app to idle
+    t =    67.57s Waiting 5.0s for "Ayarlar" Button to exist
+    t =    68.62s     Checking `Expect predicate `existsNoRetry == 1` for object "Ayarlar" Button`
+    t =    68.62s         Checking existence of `"Ayarlar" Button`
+    t =    68.70s Tap "Ayarlar" Button
+    t =    68.70s     Wait for com.canliceviri.app to idle
+    t =    68.71s     Find the "Ayarlar" Button
+    t =    68.81s     Check for interrupting elements affecting "Ayarlar" Button
+    t =    69.41s     Synthesize event
+    t =    69.76s     Wait for com.canliceviri.app to idle
+    t =    69.89s Waiting 5.0s for "Ekran" Button to exist
+    t =    70.89s     Checking `Expect predicate `existsNoRetry == 1` for object "Ekran" Button`
+    t =    70.90s         Checking existence of `"Ekran" Button`
+    t =    70.96s Tap "Ekran" Button
+    t =    70.96s     Wait for com.canliceviri.app to idle
+    t =    70.98s     Find the "Ekran" Button
+    t =    71.04s     Check for interrupting elements affecting "Ekran" Button
+    t =    71.54s     Synthesize event
+    t =    71.94s     Wait for com.canliceviri.app to idle
+    t =    72.00s Checking existence of `Alert (First Match)`
+    t =    72.73s Waiting 5.0s for "Kamera" Button to exist
+    t =    73.74s     Checking `Expect predicate `existsNoRetry == 1` for object "Kamera" Button`
+    t =    73.74s         Checking existence of `"Kamera" Button`
+    t =    73.81s Tap "Kamera" Button
+    t =    73.81s     Wait for com.canliceviri.app to idle
+    t =    73.82s     Find the "Kamera" Button
+    t =    73.89s     Check for interrupting elements affecting "Kamera" Button
+    t =    74.34s     Synthesize event
+    t =    74.70s     Wait for com.canliceviri.app to idle
+    t =    74.75s Tear Down
+    t =    74.76s     Setting device orientation to Portrait
+    t =    74.83s         Wait for com.canliceviri.app to idle
+    t =    74.86s     Terminate com.canliceviri.app:69754
+Test Case '-[CanliCeviriUITests.CanliCeviriUITests testTabCyclingStress]' passed (76.310 seconds).
+Test Suite 'CanliCeviriUITests' passed at 2026-11-02 18:33:47.078.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 947.707 (947.732) seconds
+Test Suite 'CanliCeviriUITests.xctest' passed at 2026-11-02 18:33:47.080.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 947.707 (947.735) seconds
+Test Suite 'All tests' passed at 2026-11-02 18:33:47.082.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 947.707 (947.739) seconds
+2026-11-02 18:34:49.264 xcodebuild[40155:107708] [MT] IDETestOperationsObserverDebug: 1027.480 elapsed -- Testing started completed.
+2026-11-02 18:34:49.265 xcodebuild[40155:107708] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-11-02 18:34:49.265 xcodebuild[40155:107708] [MT] IDETestOperationsObserverDebug: 1027.480 sec, +1027.480 sec -- end
+
+Test session results, code coverage, and logs:
+	/Users/runner/work/canli-ceviri/canli-ceviri/results/ui.xcresult
+
+** TEST EXECUTE SUCCEEDED **
+
+Testing started

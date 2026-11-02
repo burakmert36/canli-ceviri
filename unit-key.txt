@@ -1,0 +1,83 @@
+2026-11-02 18:10:29.030926+0000 CanliCeviri[21650:65032] [] nw_listener_socket_inbox_create_socket setsockopt SO_NECP_LISTENUUID failed [2: No such file or directory]
+2026-11-02 18:10:32.265058+0000 CanliCeviri[21650:65046] [] nw_listener_socket_inbox_create_socket setsockopt SO_NECP_LISTENUUID failed [2: No such file or directory]
+	 Executed 5 tests, with 0 failures (0 unexpected) in 11.181 (11.190) seconds
+Test Case '-[CanliCeviriTests.CaptionTrackerTests testFuzzNeverCrashes]' started.
+Test Case '-[CanliCeviriTests.CaptionTrackerTests testFuzzNeverCrashes]' passed (3.106 seconds).
+/Users/runner/work/canli-ceviri/canli-ceviri/Tests/Unit/CaptionTrackerTests.swift:130: Test Case '-[CanliCeviriTests.CaptionTrackerTests testPerformanceOfLongRollUp]' measured [Time, seconds] average: 0.266, relative standard deviation: 11.001%, values: [0.261267, 0.254243, 0.243313, 0.249655, 0.293271, 0.342264, 0.249165, 0.257799, 0.239903, 0.264675], performanceMetricID:com.apple.XCTPerformanceMetric_WallClockTime, baselineName: "", baselineAverage: , polarity: prefers smaller, maxPercentRegression: 10.000%, maxPercentRelativeStandardDeviation: 10.000%, maxRegression: 0.100, maxStandardDeviation: 0.100
+	 Executed 13 tests, with 0 failures (0 unexpected) in 6.087 (6.105) seconds
+2026-11-02 18:10:59.932204+0000 CanliCeviri[21650:66188] [connection] nw_read_request_report [C2] Receive failed with error "Connection reset by peer"
+2026-11-02 18:11:00.941619+0000 CanliCeviri[21650:67602] [connection] nw_read_request_report [C3] Receive failed with error "Connection reset by peer"
+2026-11-02 18:11:00.942438+0000 CanliCeviri[21650:67602] [connection] nw_protocol_socket_reset_linger [C3:1] setsockopt SO_LINGER failed [22: Invalid argument]
+2026-11-02 18:11:01.223295+0000 CanliCeviri[21650:66188] [] nw_listener_socket_inbox_create_socket setsockopt SO_NECP_LISTENUUID failed [2: No such file or directory]
+2026-11-02 18:11:03.190644+0000 CanliCeviri[21650:65046] [connection] nw_read_request_report [C4] Receive failed with error "Connection reset by peer"
+2026-11-02 18:11:05.286922+0000 CanliCeviri[21650:67619] [connection] nw_read_request_report [C5] Receive failed with error "Connection reset by peer"
+2026-11-02 18:11:05.287635+0000 CanliCeviri[21650:67619] [connection] nw_protocol_socket_reset_linger [C5:1] setsockopt SO_LINGER failed [22: Invalid argument]
+2026-11-02 18:11:14.934661+0000 CanliCeviri[21650:65032] [connection] nw_read_request_report [C6] Receive failed with error "Connection reset by peer"
+2026-11-02 18:11:28.374377+0000 CanliCeviri[21650:66257] [connection] nw_read_request_report [C7] Receive failed with error "Connection reset by peer"
+2026-11-02 18:11:28.374706+0000 CanliCeviri[21650:66257] [connection] nw_protocol_socket_reset_linger [C7:1] setsockopt SO_LINGER failed [22: Invalid argument]
+2026-11-02 18:11:35.277581+0000 CanliCeviri[21650:67602] [connection] nw_read_request_report [C8] Receive failed with error "Connection reset by peer"
+2026-11-02 18:11:37.794450+0000 CanliCeviri[21650:67602] [connection] nw_read_request_report [C9] Receive failed with error "Connection reset by peer"
+2026-11-02 18:11:37.795125+0000 CanliCeviri[21650:67602] [connection] nw_protocol_socket_reset_linger [C9:1] setsockopt SO_LINGER failed [22: Invalid argument]
+2026-11-02 18:11:38.661045+0000 CanliCeviri[21650:65046] [] nw_listener_socket_inbox_create_socket setsockopt SO_NECP_LISTENUUID failed [2: No such file or directory]
+2026-11-02 18:11:38.912948+0000 CanliCeviri[21650:65046] [] nw_listener_socket_inbox_create_socket setsockopt SO_NECP_LISTENUUID failed [2: No such file or directory]
+2026-11-02 18:11:41.913726+0000 CanliCeviri[21650:66257] [] nw_listener_socket_inbox_create_socket setsockopt SO_NECP_LISTENUUID failed [2: No such file or directory]
+2026-11-02 18:11:43.542578+0000 CanliCeviri[21650:66257] [connection] nw_read_request_report [C10] Receive failed with error "Connection reset by peer"
+2026-11-02 18:11:48.441163+0000 CanliCeviri[21650:66257] [connection] nw_read_request_report [C11] Receive failed with error "Connection reset by peer"
+2026-11-02 18:11:48.441621+0000 CanliCeviri[21650:66257] [connection] nw_protocol_socket_reset_linger [C11:1] setsockopt SO_LINGER failed [22: Invalid argument]
+2026-11-02 18:11:53.618044+0000 CanliCeviri[21650:65032] fopen failed for data file: errno = 2 (No such file or directory)
+2026-11-02 18:11:56.081359+0000 CanliCeviri[21650:72769] [connection] nw_read_request_report [C12] Receive failed with error "Connection reset by peer"
+/Users/runner/work/canli-ceviri/canli-ceviri/Tests/Unit/EngineTests.swift:153: error: -[CanliCeviriTests.EngineTests testScreenCaptionsAreReadTranslatedAndShown] : XCTAssertTrue failed - orijinal:  | çeviri:  | durum: Bu cihaz Resim içinde Resim desteklemiyor | günlük: 18:11:49.353  Başlat (ekran modu) ¦ 18:11:49.791  uzantı bilgisi: v=test;up=1;rc=0;drop=0 ¦ 18:11:55.360  ekran yönü değişti → yatay ¦ 18:11:55.760  Durdur ¦ 18:11:56.082  uzantı bağlantısı kapandı ¦ 18:11:56.941  uzantı bağlandı ¦ 18:11:57.007  Başlat (ekran modu) ¦ 18:11:57.440  uzantı bilgisi: v=test;up=1;rc=0;drop=0
+/Users/runner/work/canli-ceviri/canli-ceviri/Tests/Unit/EngineTests.swift:159: error: -[CanliCeviriTests.EngineTests testScreenCaptionsAreReadTranslatedAndShown] : XCTAssertEqual failed: ("0") is not equal to ("1") - Tekrarlanan kelimeler: 
+2026-11-02 18:12:49.683902+0000 CanliCeviri[21650:69157] [connection] nw_read_request_report [C13] Receive failed with error "Connection reset by peer"
+2026-11-02 18:12:49.685023+0000 CanliCeviri[21650:69157] [connection] nw_protocol_socket_reset_linger [C13:1] setsockopt SO_LINGER failed [22: Invalid argument]
+Test Case '-[CanliCeviriTests.EngineTests testScreenCaptionsAreReadTranslatedAndShown]' failed (53.621 seconds).
+2026-11-02 18:12:59.406919+0000 CanliCeviri[21650:72769] [connection] nw_read_request_report [C14] Receive failed with error "Connection reset by peer"
+2026-11-02 18:12:59.407443+0000 CanliCeviri[21650:72769] [connection] nw_protocol_socket_reset_linger [C14:1] setsockopt SO_LINGER failed [22: Invalid argument]
+2026-11-02 18:13:07.679571+0000 CanliCeviri[21650:72770] [connection] nw_read_request_report [C15] Receive failed with error "Connection reset by peer"
+2026-11-02 18:13:07.680572+0000 CanliCeviri[21650:72770] [connection] nw_protocol_socket_reset_linger [C15:1] setsockopt SO_LINGER failed [22: Invalid argument]
+2026-11-02 18:13:09.900971+0000 CanliCeviri[21650:72769] [connection] nw_read_request_report [C16] Receive failed with error "Connection reset by peer"
+Test Suite 'EngineTests' failed at 2026-11-02 18:13:09.932.
+	 Executed 13 tests, with 2 failures (0 unexpected) in 133.384 (133.404) seconds
+/Users/runner/work/canli-ceviri/canli-ceviri/Tests/Unit/HistoryTests.swift:65: Test Case '-[CanliCeviriTests.HistoryTests testConcurrentAddsFromMainAreSafe]' measured [Time, seconds] average: 0.490, relative standard deviation: 72.199%, values: [0.049937, 0.101538, 0.141980, 0.185235, 0.341825, 1.096960, 0.910217, 0.753993, 0.659885, 0.663396], performanceMetricID:com.apple.XCTPerformanceMetric_WallClockTime, baselineName: "", baselineAverage: , polarity: prefers smaller, maxPercentRegression: 10.000%, maxPercentRelativeStandardDeviation: 10.000%, maxRegression: 0.100, maxStandardDeviation: 0.100
+	 Executed 5 tests, with 0 failures (0 unexpected) in 8.685 (8.693) seconds
+2026-11-02 18:13:18.631564+0000 CanliCeviri[21650:72769] [] nw_listener_socket_inbox_create_socket setsockopt SO_NECP_LISTENUUID failed [2: No such file or directory]
+2026-11-02 18:13:18.958408+0000 CanliCeviri[21650:72769] [] nw_listener_socket_inbox_create_socket setsockopt SO_NECP_LISTENUUID failed [2: No such file or directory]
+2026-11-02 18:13:19.298268+0000 CanliCeviri[21650:69157] [] nw_listener_socket_inbox_create_socket setsockopt SO_NECP_LISTENUUID failed [2: No such file or directory]
+2026-11-02 18:13:21.178002+0000 CanliCeviri[21650:72769] [] nw_listener_socket_inbox_create_socket setsockopt SO_NECP_LISTENUUID failed [2: No such file or directory]
+2026-11-02 18:13:21.506638+0000 CanliCeviri[21650:65032] [] nw_listener_socket_inbox_create_socket setsockopt SO_NECP_LISTENUUID failed [2: No such file or directory]
+2026-11-02 18:13:22.369916+0000 CanliCeviri[21650:72769] [] nw_listener_socket_inbox_create_socket setsockopt SO_NECP_LISTENUUID failed [2: No such file or directory]
+2026-11-02 18:13:22.739310+0000 CanliCeviri[21650:78499] [] nw_listener_socket_inbox_create_socket setsockopt SO_NECP_LISTENUUID failed [2: No such file or directory]
+2026-11-02 18:13:32.599189+0000 CanliCeviri[21650:72770] [] nw_listener_socket_inbox_create_socket setsockopt SO_NECP_LISTENUUID failed [2: No such file or directory]
+2026-11-02 18:13:32.926755+0000 CanliCeviri[21650:72770] [] nw_listener_socket_inbox_create_socket setsockopt SO_NECP_LISTENUUID failed [2: No such file or directory]
+2026-11-02 18:13:33.252725+0000 CanliCeviri[21650:69157] [] nw_listener_socket_inbox_create_socket setsockopt SO_NECP_LISTENUUID failed [2: No such file or directory]
+2026-11-02 18:13:34.273991+0000 CanliCeviri[21650:72772] [connection] nw_read_request_report [C66] Receive failed with error "Connection reset by peer"
+2026-11-02 18:13:34.278421+0000 CanliCeviri[21650:72772] [] nw_listener_socket_inbox_create_socket setsockopt SO_NECP_LISTENUUID failed [2: No such file or directory]
+2026-11-02 18:13:34.580278+0000 CanliCeviri[21650:69157] [] nw_listener_socket_inbox_create_socket setsockopt SO_NECP_LISTENUUID failed [2: No such file or directory]
+2026-11-02 18:13:36.106507+0000 CanliCeviri[21650:72770] [] nw_listener_socket_inbox_create_socket setsockopt SO_NECP_LISTENUUID failed [2: No such file or directory]
+2026-11-02 18:13:36.438666+0000 CanliCeviri[21650:72772] [] nw_listener_socket_inbox_create_socket setsockopt SO_NECP_LISTENUUID failed [2: No such file or directory]
+2026-11-02 18:13:37.111117+0000 CanliCeviri[21650:72772] [] nw_listener_socket_inbox_create_socket setsockopt SO_NECP_LISTENUUID failed [2: No such file or directory]
+2026-11-02 18:13:38.394041+0000 CanliCeviri[21650:72772] [] nw_listener_socket_inbox_create_socket setsockopt SO_NECP_LISTENUUID failed [2: No such file or directory]
+2026-11-02 18:13:40.401855+0000 CanliCeviri[21650:72770] [connection] nw_read_request_report [C222] Receive failed with error "Connection reset by peer"
+2026-11-02 18:13:40.406217+0000 CanliCeviri[21650:72772] [] nw_listener_socket_inbox_create_socket setsockopt SO_NECP_LISTENUUID failed [2: No such file or directory]
+2026-11-02 18:13:44.432431+0000 CanliCeviri[21650:72772] [] nw_listener_socket_inbox_create_socket setsockopt SO_NECP_LISTENUUID failed [2: No such file or directory]
+2026-11-02 18:13:45.250503+0000 CanliCeviri[21650:72770] [] nw_listener_socket_inbox_create_socket setsockopt SO_NECP_LISTENUUID failed [2: No such file or directory]
+	 Executed 17 tests, with 0 failures (0 unexpected) in 26.928 (26.949) seconds
+	 Executed 13 tests, with 0 failures (0 unexpected) in 93.886 (93.903) seconds
+Test Case '-[CanliCeviriTests.PCMConverterTests testFuzzRandomFormatsNeverCrash]' started.
+Test Case '-[CanliCeviriTests.PCMConverterTests testFuzzRandomFormatsNeverCrash]' passed (6.621 seconds).
+	 Executed 12 tests, with 0 failures (0 unexpected) in 8.952 (8.968) seconds
+/Users/runner/work/canli-ceviri/canli-ceviri/Tests/Unit/RendererTests.swift:86: Test Case '-[CanliCeviriTests.RendererTests testRenderPerformance]' measured [Time, seconds] average: 0.186, relative standard deviation: 2.237%, values: [0.185950, 0.188568, 0.188626, 0.174632, 0.186449, 0.185866, 0.187792, 0.187157, 0.191136, 0.186883], performanceMetricID:com.apple.XCTPerformanceMetric_WallClockTime, baselineName: "", baselineAverage: , polarity: prefers smaller, maxPercentRegression: 10.000%, maxPercentRelativeStandardDeviation: 10.000%, maxRegression: 0.100, maxStandardDeviation: 0.100
+	 Executed 7 tests, with 0 failures (0 unexpected) in 28.407 (28.416) seconds
+2026-11-02 18:15:56.872136+0000 CanliCeviri[21650:83079] [] nw_listener_socket_inbox_create_socket setsockopt SO_NECP_LISTENUUID failed [2: No such file or directory]
+2026-11-02 18:16:26.803004+0000 CanliCeviri[21650:83078] [] nw_listener_socket_inbox_create_socket setsockopt SO_NECP_LISTENUUID failed [2: No such file or directory]
+2026-11-02 18:16:27.333988+0000 CanliCeviri[21650:98362] [connection] nw_endpoint_flow_failed_with_error [C233 127.0.0.1:47421 in_progress socket-flow (satisfied (Path is satisfied), interface: lo0)] already failing, returning
+2026-11-02 18:16:27.868250+0000 CanliCeviri[21650:98362] [connection] nw_endpoint_flow_failed_with_error [C234 127.0.0.1:47421 in_progress socket-flow (satisfied (Path is satisfied), interface: lo0)] already failing, returning
+2026-11-02 18:16:28.326188+0000 CanliCeviri[21650:98362] [] nw_listener_socket_inbox_create_socket setsockopt SO_NECP_LISTENUUID failed [2: No such file or directory]
+	 Executed 5 tests, with 0 failures (0 unexpected) in 31.626 (31.633) seconds
+	 Executed 11 tests, with 0 failures (0 unexpected) in 0.205 (0.220) seconds
+	 Executed 17 tests, with 0 failures (0 unexpected) in 0.985 (1.009) seconds
+Test Suite 'CanliCeviriTests.xctest' failed at 2026-11-02 18:16:29.732.
+	 Executed 118 tests, with 2 failures (0 unexpected) in 350.327 (350.502) seconds
+Test Suite 'All tests' failed at 2026-11-02 18:16:29.733.
+	 Executed 118 tests, with 2 failures (0 unexpected) in 350.327 (350.602) seconds
+** TEST EXECUTE FAILED **

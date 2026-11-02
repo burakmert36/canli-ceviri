@@ -1,0 +1,150 @@
+
+CodeSign /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviri.app/PlugIns/CanliCeviriTests.xctest (in target 'CanliCeviriTests' from project 'CanliCeviri')
+    cd /Users/runner/work/canli-ceviri/canli-ceviri
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --timestamp\=none --generate-entitlement-der /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviri.app/PlugIns/CanliCeviriTests.xctest
+
+RegisterExecutionPolicyException /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviri.app/PlugIns/CanliCeviriTests.xctest (in target 'CanliCeviriTests' from project 'CanliCeviri')
+    cd /Users/runner/work/canli-ceviri/canli-ceviri
+    builtin-RegisterExecutionPolicyException /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviri.app/PlugIns/CanliCeviriTests.xctest
+
+Touch /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviri.app/PlugIns/CanliCeviriTests.xctest (in target 'CanliCeviriTests' from project 'CanliCeviri')
+    cd /Users/runner/work/canli-ceviri/canli-ceviri
+    /usr/bin/touch -c /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviri.app/PlugIns/CanliCeviriTests.xctest
+
+CodeSign /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviri.app/CanliCeviri.debug.dylib (in target 'CanliCeviri' from project 'CanliCeviri')
+    cd /Users/runner/work/canli-ceviri/canli-ceviri
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --timestamp\=none --generate-entitlement-der /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviri.app/CanliCeviri.debug.dylib
+
+CodeSign /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviri.app/__preview.dylib (in target 'CanliCeviri' from project 'CanliCeviri')
+    cd /Users/runner/work/canli-ceviri/canli-ceviri
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --timestamp\=none --generate-entitlement-der /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviri.app/__preview.dylib
+
+CodeSign /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviri.app (in target 'CanliCeviri' from project 'CanliCeviri')
+    cd /Users/runner/work/canli-ceviri/canli-ceviri
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --timestamp\=none --generate-entitlement-der /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviri.app
+
+ValidateEmbeddedBinary /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviri.app/PlugIns/Broadcast.appex (in target 'CanliCeviri' from project 'CanliCeviri')
+    cd /Users/runner/work/canli-ceviri/canli-ceviri
+    /Applications/Xcode_26.3.app/Contents/Developer/usr/bin/embeddedBinaryValidationUtility /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviri.app/PlugIns/Broadcast.appex -signing-cert - -info-plist-path /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviri.app/Info.plist
+
+RegisterExecutionPolicyException /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviri.app (in target 'CanliCeviri' from project 'CanliCeviri')
+    cd /Users/runner/work/canli-ceviri/canli-ceviri
+    builtin-RegisterExecutionPolicyException /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviri.app
+
+Validate /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviri.app (in target 'CanliCeviri' from project 'CanliCeviri')
+    cd /Users/runner/work/canli-ceviri/canli-ceviri
+    builtin-validationUtility /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviri.app -shallow-bundle -infoplist-subpath Info.plist
+
+Touch /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviri.app (in target 'CanliCeviri' from project 'CanliCeviri')
+    cd /Users/runner/work/canli-ceviri/canli-ceviri
+    /usr/bin/touch -c /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviri.app
+
+ProcessInfoPlistFile /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/PlugIns/CanliCeviriUITests.xctest/Info.plist /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Intermediates.noindex/CanliCeviri.build/Debug-iphonesimulator/CanliCeviriUITests.build/empty-CanliCeviriUITests.plist (in target 'CanliCeviriUITests' from project 'CanliCeviri')
+    cd /Users/runner/work/canli-ceviri/canli-ceviri
+    builtin-infoPlistUtility /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Intermediates.noindex/CanliCeviri.build/Debug-iphonesimulator/CanliCeviriUITests.build/empty-CanliCeviriUITests.plist -producttype com.apple.product-type.bundle.ui-testing -expandbuildsettings -format binary -platform iphonesimulator -additionalcontentfile /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Intermediates.noindex/CanliCeviri.build/Debug-iphonesimulator/CanliCeviriUITests.build/ProductTypeInfoPlistAdditions.plist -o /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/PlugIns/CanliCeviriUITests.xctest/Info.plist
+
+Ld /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/PlugIns/CanliCeviriUITests.xctest/CanliCeviriUITests normal (in target 'CanliCeviriUITests' from project 'CanliCeviri')
+    cd /Users/runner/work/canli-ceviri/canli-ceviri
+    /Applications/Xcode_26.3.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -Xlinker -reproducible -target x86_64-apple-ios18.0-simulator -bundle -isysroot /Applications/Xcode_26.3.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.2.sdk -O0 -L/Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Intermediates.noindex/EagerLinkingTBDs/Debug-iphonesimulator -L/Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator -L/Applications/Xcode_26.3.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib -F/Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Intermediates.noindex/EagerLinkingTBDs/Debug-iphonesimulator -F/Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator -iframework /Applications/Xcode_26.3.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks -iframework /Applications/Xcode_26.3.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.2.sdk/Developer/Library/Frameworks -filelist /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Intermediates.noindex/CanliCeviri.build/Debug-iphonesimulator/CanliCeviriUITests.build/Objects-normal/x86_64/CanliCeviriUITests.LinkFileList -Xlinker -rpath -Xlinker /usr/lib/swift -Xlinker -rpath -Xlinker @loader_path/Frameworks -Xlinker -rpath -Xlinker @executable_path/Frameworks -dead_strip -Xlinker -object_path_lto -Xlinker /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Intermediates.noindex/CanliCeviri.build/Debug-iphonesimulator/CanliCeviriUITests.build/Objects-normal/x86_64/CanliCeviriUITests_lto.o -rdynamic -Xlinker -no_deduplicate -Xlinker -objc_abi_version -Xlinker 2 -Xlinker -debug_variant -Xlinker -dependency_info -Xlinker /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Intermediates.noindex/CanliCeviri.build/Debug-iphonesimulator/CanliCeviriUITests.build/Objects-normal/x86_64/CanliCeviriUITests_dependency_info.dat -fobjc-link-runtime -fprofile-instr-generate -L/Applications/Xcode_26.3.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphonesimulator -L/usr/lib/swift -Xlinker -add_ast_path -Xlinker /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Intermediates.noindex/CanliCeviri.build/Debug-iphonesimulator/CanliCeviriUITests.build/Objects-normal/x86_64/CanliCeviriUITests.swiftmodule @/Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Intermediates.noindex/CanliCeviri.build/Debug-iphonesimulator/CanliCeviriUITests.build/Objects-normal/x86_64/CanliCeviriUITests-linker-args.resp -Xlinker -needed_framework -Xlinker XCTest -framework XCTest -Xlinker -needed-lXCTestSwiftSupport -lXCTestSwiftSupport -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __entitlements -Xlinker /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Intermediates.noindex/CanliCeviri.build/Debug-iphonesimulator/CanliCeviriUITests.build/CanliCeviriUITests.xctest-Simulated.xcent -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __ents_der -Xlinker /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Intermediates.noindex/CanliCeviri.build/Debug-iphonesimulator/CanliCeviriUITests.build/CanliCeviriUITests.xctest-Simulated.xcent.der -Xlinker -no_adhoc_codesign -o /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/PlugIns/CanliCeviriUITests.xctest/CanliCeviriUITests
+
+CopySwiftLibs /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/PlugIns/CanliCeviriUITests.xctest (in target 'CanliCeviriUITests' from project 'CanliCeviri')
+    cd /Users/runner/work/canli-ceviri/canli-ceviri
+    builtin-swiftStdLibTool --copy --verbose --sign - --scan-executable /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/PlugIns/CanliCeviriUITests.xctest/CanliCeviriUITests --scan-folder /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/PlugIns/CanliCeviriUITests.xctest/Frameworks --scan-folder /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/PlugIns/CanliCeviriUITests.xctest/PlugIns --scan-folder /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/PlugIns/CanliCeviriUITests.xctest/SystemExtensions --scan-folder /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/PlugIns/CanliCeviriUITests.xctest/Extensions --platform iphonesimulator --toolchain /Applications/Xcode_26.3.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --destination /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/PlugIns/CanliCeviriUITests.xctest/Frameworks --strip-bitcode --scan-executable /Applications/Xcode_26.3.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib/libXCTestSwiftSupport.dylib --strip-bitcode-tool /Applications/Xcode_26.3.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/bitcode_strip --emit-dependency-info /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Intermediates.noindex/CanliCeviri.build/Debug-iphonesimulator/CanliCeviriUITests.build/SwiftStdLibToolInputDependencies.dep --filter-for-swift-os
+
+ExtractAppIntentsMetadata (in target 'CanliCeviriUITests' from project 'CanliCeviri')
+    cd /Users/runner/work/canli-ceviri/canli-ceviri
+    /Applications/Xcode_26.3.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsmetadataprocessor --toolchain-dir /Applications/Xcode_26.3.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --module-name CanliCeviriUITests --sdk-root /Applications/Xcode_26.3.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.2.sdk --xcode-version 17C529 --platform-family iOS --deployment-target 18.0 --bundle-identifier com.canliceviri.app.uitests --output /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/PlugIns/CanliCeviriUITests.xctest --target-triple x86_64-apple-ios18.0-simulator --binary-file /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/PlugIns/CanliCeviriUITests.xctest/CanliCeviriUITests --dependency-file /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Intermediates.noindex/CanliCeviri.build/Debug-iphonesimulator/CanliCeviriUITests.build/Objects-normal/x86_64/CanliCeviriUITests_dependency_info.dat --stringsdata-file /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Intermediates.noindex/CanliCeviri.build/Debug-iphonesimulator/CanliCeviriUITests.build/Objects-normal/x86_64/ExtractedAppShortcutsMetadata.stringsdata --source-file-list /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Intermediates.noindex/CanliCeviri.build/Debug-iphonesimulator/CanliCeviriUITests.build/Objects-normal/x86_64/CanliCeviriUITests.SwiftFileList --metadata-file-list /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Intermediates.noindex/CanliCeviri.build/Debug-iphonesimulator/CanliCeviriUITests.build/CanliCeviriUITests.DependencyMetadataFileList --static-metadata-file-list /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Intermediates.noindex/CanliCeviri.build/Debug-iphonesimulator/CanliCeviriUITests.build/CanliCeviriUITests.DependencyStaticMetadataFileList --swift-const-vals-list /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Intermediates.noindex/CanliCeviri.build/Debug-iphonesimulator/CanliCeviriUITests.build/Objects-normal/x86_64/CanliCeviriUITests.SwiftConstValuesFileList --compile-time-extraction --deployment-aware-processing --validate-assistant-intents --no-app-shortcuts-localization
+2026-11-02 18:09:28.546 appintentsmetadataprocessor[19391:58693] Starting appintentsmetadataprocessor export
+2026-11-02 18:09:28.550 appintentsmetadataprocessor[19391:58693] warning: Metadata extraction skipped. No AppIntents.framework dependency found.
+
+AppIntentsSSUTraining (in target 'CanliCeviriUITests' from project 'CanliCeviri')
+    cd /Users/runner/work/canli-ceviri/canli-ceviri
+    /Applications/Xcode_26.3.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsnltrainingprocessor --infoplist-path /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/PlugIns/CanliCeviriUITests.xctest/Info.plist --temp-dir-path /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Intermediates.noindex/CanliCeviri.build/Debug-iphonesimulator/CanliCeviriUITests.build/ssu --bundle-id com.canliceviri.app.uitests --product-path /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/PlugIns/CanliCeviriUITests.xctest --extracted-metadata-path /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/PlugIns/CanliCeviriUITests.xctest/Metadata.appintents --metadata-file-list /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Intermediates.noindex/CanliCeviri.build/Debug-iphonesimulator/CanliCeviriUITests.build/CanliCeviriUITests.DependencyMetadataFileList --archive-ssu-assets
+2026-11-02 18:09:28.606 appintentsnltrainingprocessor[19392:58695] Parsing options for appintentsnltrainingprocessor
+2026-11-02 18:09:28.609 appintentsnltrainingprocessor[19392:58695] No AppShortcuts found - Skipping.
+
+MkDir /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app (in target 'CanliCeviriUITests' from project 'CanliCeviri')
+    cd /Users/runner/work/canli-ceviri/canli-ceviri
+    /bin/mkdir -p /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app
+
+CopyPlistFile /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/Info.plist /Applications/Xcode_26.3.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Xcode/Agents/XCTRunner.app/Info.plist (in target 'CanliCeviriUITests' from project 'CanliCeviri')
+    cd /Users/runner/work/canli-ceviri/canli-ceviri
+    builtin-copyPlist --validate --convert xml1 --macro-expansion WRAPPEDPRODUCTNAME CanliCeviriUITests-Runner --macro-expansion WRAPPEDPRODUCTBUNDLEIDENTIFIER com.canliceviri.app.uitests.xctrunner --macro-expansion TESTPRODUCTNAME CanliCeviriUITests --macro-expansion TESTPRODUCTBUNDLEIDENTIFIER com.canliceviri.app.uitests --copy-value UIDeviceFamily /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/PlugIns/CanliCeviriUITests.xctest/Info.plist --outdir /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app -- /Applications/Xcode_26.3.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Xcode/Agents/XCTRunner.app/Info.plist
+
+CopyAndPreserveArchs /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/CanliCeviriUITests-Runner (in target 'CanliCeviriUITests' from project 'CanliCeviri')
+    cd /Users/runner/work/canli-ceviri/canli-ceviri
+    /Applications/Xcode_26.3.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/lipo /Applications/Xcode_26.3.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Xcode/Agents/XCTRunner.app/XCTRunner -output /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/CanliCeviriUITests-Runner -extract x86_64
+
+Copy /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/PkgInfo /Applications/Xcode_26.3.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Xcode/Agents/XCTRunner.app/PkgInfo (in target 'CanliCeviriUITests' from project 'CanliCeviri')
+    cd /Users/runner/work/canli-ceviri/canli-ceviri
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks /Applications/Xcode_26.3.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Xcode/Agents/XCTRunner.app/PkgInfo /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app
+
+Copy /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/Frameworks/libXCTestSwiftSupport.dylib /Applications/Xcode_26.3.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib/libXCTestSwiftSupport.dylib (in target 'CanliCeviriUITests' from project 'CanliCeviri')
+    cd /Users/runner/work/canli-ceviri/canli-ceviri
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -exclude Headers -exclude PrivateHeaders -exclude Modules -exclude \*.tbd -resolve-src-symlinks /Applications/Xcode_26.3.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib/libXCTestSwiftSupport.dylib /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/Frameworks
+
+Copy /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/Frameworks/XCUnit.framework /Applications/Xcode_26.3.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/PrivateFrameworks/XCUnit.framework (in target 'CanliCeviriUITests' from project 'CanliCeviri')
+    cd /Users/runner/work/canli-ceviri/canli-ceviri
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -exclude Headers -exclude PrivateHeaders -exclude Modules -exclude \*.tbd -resolve-src-symlinks /Applications/Xcode_26.3.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/PrivateFrameworks/XCUnit.framework /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/Frameworks
+
+Copy /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/Frameworks/XCUIAutomation.framework /Applications/Xcode_26.3.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks/XCUIAutomation.framework (in target 'CanliCeviriUITests' from project 'CanliCeviri')
+    cd /Users/runner/work/canli-ceviri/canli-ceviri
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -exclude Headers -exclude PrivateHeaders -exclude Modules -exclude \*.tbd -resolve-src-symlinks /Applications/Xcode_26.3.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks/XCUIAutomation.framework /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/Frameworks
+
+Copy /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/Frameworks/XCTestSupport.framework /Applications/Xcode_26.3.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/PrivateFrameworks/XCTestSupport.framework (in target 'CanliCeviriUITests' from project 'CanliCeviri')
+    cd /Users/runner/work/canli-ceviri/canli-ceviri
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -exclude Headers -exclude PrivateHeaders -exclude Modules -exclude \*.tbd -resolve-src-symlinks /Applications/Xcode_26.3.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/PrivateFrameworks/XCTestSupport.framework /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/Frameworks
+
+Copy /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/Frameworks/XCTestCore.framework /Applications/Xcode_26.3.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/PrivateFrameworks/XCTestCore.framework (in target 'CanliCeviriUITests' from project 'CanliCeviri')
+    cd /Users/runner/work/canli-ceviri/canli-ceviri
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -exclude Headers -exclude PrivateHeaders -exclude Modules -exclude \*.tbd -resolve-src-symlinks /Applications/Xcode_26.3.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/PrivateFrameworks/XCTestCore.framework /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/Frameworks
+
+Copy /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/Frameworks/XCTest.framework /Applications/Xcode_26.3.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks/XCTest.framework (in target 'CanliCeviriUITests' from project 'CanliCeviri')
+    cd /Users/runner/work/canli-ceviri/canli-ceviri
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -exclude Headers -exclude PrivateHeaders -exclude Modules -exclude \*.tbd -resolve-src-symlinks /Applications/Xcode_26.3.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks/XCTest.framework /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/Frameworks
+
+Copy /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/Frameworks/XCTAutomationSupport.framework /Applications/Xcode_26.3.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/PrivateFrameworks/XCTAutomationSupport.framework (in target 'CanliCeviriUITests' from project 'CanliCeviri')
+    cd /Users/runner/work/canli-ceviri/canli-ceviri
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -exclude Headers -exclude PrivateHeaders -exclude Modules -exclude \*.tbd -resolve-src-symlinks /Applications/Xcode_26.3.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/PrivateFrameworks/XCTAutomationSupport.framework /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/Frameworks
+
+Copy /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/Frameworks/Testing.framework /Applications/Xcode_26.3.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks/Testing.framework (in target 'CanliCeviriUITests' from project 'CanliCeviri')
+    cd /Users/runner/work/canli-ceviri/canli-ceviri
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -exclude Headers -exclude PrivateHeaders -exclude Modules -exclude \*.tbd -resolve-src-symlinks /Applications/Xcode_26.3.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks/Testing.framework /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/Frameworks
+
+CodeSign /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/PlugIns/CanliCeviriUITests.xctest (in target 'CanliCeviriUITests' from project 'CanliCeviri')
+    cd /Users/runner/work/canli-ceviri/canli-ceviri
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --timestamp\=none --generate-entitlement-der /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/PlugIns/CanliCeviriUITests.xctest
+
+RegisterExecutionPolicyException /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/PlugIns/CanliCeviriUITests.xctest (in target 'CanliCeviriUITests' from project 'CanliCeviri')
+    cd /Users/runner/work/canli-ceviri/canli-ceviri
+    builtin-RegisterExecutionPolicyException /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/PlugIns/CanliCeviriUITests.xctest
+
+CodeSign /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app (in target 'CanliCeviriUITests' from project 'CanliCeviri')
+    cd /Users/runner/work/canli-ceviri/canli-ceviri
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --timestamp\=none --generate-entitlement-der /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app
+/Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app: replacing existing signature
+
+Touch /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/PlugIns/CanliCeviriUITests.xctest (in target 'CanliCeviriUITests' from project 'CanliCeviri')
+    cd /Users/runner/work/canli-ceviri/canli-ceviri
+    /usr/bin/touch -c /Users/runner/work/canli-ceviri/canli-ceviri/dd/Build/Products/Debug-iphonesimulator/CanliCeviriUITests-Runner.app/PlugIns/CanliCeviriUITests.xctest
+
+** TEST BUILD SUCCEEDED **
+
