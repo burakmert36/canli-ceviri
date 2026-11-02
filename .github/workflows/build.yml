@@ -15,7 +15,8 @@ concurrency:
 
 jobs:
   build:
-    runs-on: macos-latest
+    # arm64 macOS makinelerinde kapasite sıkıntısı olduğunda Intel makineler kullanılır (iPhone için derleme aynıdır).
+    runs-on: ${{ vars.BUILD_RUNNER || 'macos-15-intel' }}
     steps:
       - uses: actions/checkout@v4
 
