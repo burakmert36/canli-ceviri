@@ -1,0 +1,63 @@
+run=9 status=success sha=8c7b46fcbac541d15f0bb83a9ad9536a4aeee8e8
+** BUILD SUCCEEDED **
+----- son 60 satır -----
+    /Applications/Xcode_26.3.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsmetadataprocessor --toolchain-dir /Applications/Xcode_26.3.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --module-name CanliCeviri --sdk-root /Applications/Xcode_26.3.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.2.sdk --xcode-version 17C529 --platform-family iOS --deployment-target 18.0 --bundle-identifier com.canliceviri.app --output /Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Products/Release-iphoneos/CanliCeviri.app --target-triple arm64-apple-ios18.0 --binary-file /Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Products/Release-iphoneos/CanliCeviri.app/CanliCeviri --dependency-file /Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Intermediates.noindex/CanliCeviri.build/Release-iphoneos/CanliCeviri.build/Objects-normal/arm64/CanliCeviri_dependency_info.dat --stringsdata-file /Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Intermediates.noindex/CanliCeviri.build/Release-iphoneos/CanliCeviri.build/Objects-normal/arm64/ExtractedAppShortcutsMetadata.stringsdata --source-file-list /Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Intermediates.noindex/CanliCeviri.build/Release-iphoneos/CanliCeviri.build/Objects-normal/arm64/CanliCeviri.SwiftFileList --metadata-file-list /Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Intermediates.noindex/CanliCeviri.build/Release-iphoneos/CanliCeviri.build/CanliCeviri.DependencyMetadataFileList --static-metadata-file-list /Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Intermediates.noindex/CanliCeviri.build/Release-iphoneos/CanliCeviri.build/CanliCeviri.DependencyStaticMetadataFileList --swift-const-vals-list /Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Intermediates.noindex/CanliCeviri.build/Release-iphoneos/CanliCeviri.build/Objects-normal/arm64/CanliCeviri.SwiftConstValuesFileList --compile-time-extraction --deployment-aware-processing --validate-assistant-intents --no-app-shortcuts-localization
+2026-11-02 17:48:54.048 appintentsmetadataprocessor[4647:16584] Starting appintentsmetadataprocessor export
+2026-11-02 17:48:55.771 appintentsmetadataprocessor[4647:16584] Writing Metadata.appintents
+2026-11-02 17:48:55.771 appintentsmetadataprocessor[4647:16584] Metadata root: /Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Products/Release-iphoneos/CanliCeviri.app/Metadata.appintents
+
+CopySwiftLibs /Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Products/Release-iphoneos/CanliCeviri.app (in target 'CanliCeviri' from project 'CanliCeviri')
+    cd /Users/runner/work/canli-ceviri/canli-ceviri
+    builtin-swiftStdLibTool --copy --verbose --scan-executable /Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Products/Release-iphoneos/CanliCeviri.app/CanliCeviri --scan-folder /Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Products/Release-iphoneos/CanliCeviri.app/Frameworks --scan-folder /Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Products/Release-iphoneos/CanliCeviri.app/PlugIns --scan-folder /Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Products/Release-iphoneos/CanliCeviri.app/SystemExtensions --scan-folder /Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Products/Release-iphoneos/CanliCeviri.app/Extensions --platform iphoneos --toolchain /Applications/Xcode_26.3.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --destination /Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Products/Release-iphoneos/CanliCeviri.app/Frameworks --strip-bitcode --strip-bitcode-tool /Applications/Xcode_26.3.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/bitcode_strip --emit-dependency-info /Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Intermediates.noindex/CanliCeviri.build/Release-iphoneos/CanliCeviri.build/SwiftStdLibToolInputDependencies.dep --filter-for-swift-os --back-deploy-swift-span
+Ignoring --strip-bitcode because --sign was not passed
+
+ValidateEmbeddedBinary /Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Products/Release-iphoneos/CanliCeviri.app/PlugIns/Broadcast.appex (in target 'CanliCeviri' from project 'CanliCeviri')
+    cd /Users/runner/work/canli-ceviri/canli-ceviri
+    /Applications/Xcode_26.3.app/Contents/Developer/usr/bin/embeddedBinaryValidationUtility /Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Products/Release-iphoneos/CanliCeviri.app/PlugIns/Broadcast.appex -info-plist-path /Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Products/Release-iphoneos/CanliCeviri.app/Info.plist
+
+GenerateDSYMFile /Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Products/Release-iphoneos/CanliCeviri.app.dSYM /Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Products/Release-iphoneos/CanliCeviri.app/CanliCeviri (in target 'CanliCeviri' from project 'CanliCeviri')
+    cd /Users/runner/work/canli-ceviri/canli-ceviri
+    /Applications/Xcode_26.3.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/dsymutil /Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Products/Release-iphoneos/CanliCeviri.app/CanliCeviri -o /Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Products/Release-iphoneos/CanliCeviri.app.dSYM
+
+AppIntentsSSUTraining (in target 'CanliCeviri' from project 'CanliCeviri')
+    cd /Users/runner/work/canli-ceviri/canli-ceviri
+    /Applications/Xcode_26.3.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsnltrainingprocessor --infoplist-path /Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Products/Release-iphoneos/CanliCeviri.app/Info.plist --temp-dir-path /Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Intermediates.noindex/CanliCeviri.build/Release-iphoneos/CanliCeviri.build/ssu --bundle-id com.canliceviri.app --product-path /Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Products/Release-iphoneos/CanliCeviri.app --extracted-metadata-path /Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Products/Release-iphoneos/CanliCeviri.app/Metadata.appintents --metadata-file-list /Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Intermediates.noindex/CanliCeviri.build/Release-iphoneos/CanliCeviri.build/CanliCeviri.DependencyMetadataFileList --archive-ssu-assets
+2026-11-02 17:48:55.866 appintentsnltrainingprocessor[4687:16684] Parsing options for appintentsnltrainingprocessor
+2026-11-02 17:48:55.871 appintentsnltrainingprocessor[4687:16684] Starting AppIntents SSU YAML Generation
+2026-11-02 17:48:55.925 appintentsnltrainingprocessor[4687:16684] Training '${+applicationName} ile ekranı çevir|Start ${+applicationName}' for en
+2026-11-02 17:48:55.925 appintentsnltrainingprocessor[4687:16684] Training '${+applicationName} ile ekranı çevir|Start ${+applicationName}' for tr
+2026-11-02 17:48:55.926 appintentsnltrainingprocessor[4687:16684] Training '${+applicationName} kamerasını aç|${+applicationName} camera' for en
+2026-11-02 17:48:55.926 appintentsnltrainingprocessor[4687:16684] Training '${+applicationName} kamerasını aç|${+applicationName} camera' for tr
+2026-11-02 17:48:55.926 appintentsnltrainingprocessor[4687:16684] Training '${+applicationName} durdur|Stop ${+applicationName}' for en
+2026-11-02 17:48:55.926 appintentsnltrainingprocessor[4687:16684] Training '${+applicationName} durdur|Stop ${+applicationName}' for tr
+2026-11-02 17:48:55.927 appintentsnltrainingprocessor[4687:16684] Training '${+applicationName} dilini değiştir|Switch ${+applicationName} language' for en
+2026-11-02 17:48:55.927 appintentsnltrainingprocessor[4687:16684] Training '${+applicationName} dilini değiştir|Switch ${+applicationName} language' for tr
+2026-11-02 17:48:55.927 appintentsnltrainingprocessor[4687:16684] Training '${+applicationName} duraklat|Pause ${+applicationName}' for en
+2026-11-02 17:48:55.927 appintentsnltrainingprocessor[4687:16684] Training '${+applicationName} duraklat|Pause ${+applicationName}' for tr
+2026-11-02 17:48:55.927 appintentsnltrainingprocessor[4687:16684] Training Negative Phrases '' for en
+2026-11-02 17:48:55.928 appintentsnltrainingprocessor[4687:16684] Training Negative Phrases '' for tr
+2026-11-02 17:48:55.931 appintentsnltrainingprocessor[4687:16684] Application name 'Canlı Çeviri' for en
+2026-11-02 17:48:55.931 appintentsnltrainingprocessor[4687:16684] Application name 'Canlı Çeviri' for tr
+2026-11-02 17:48:55.991 appintentsnltrainingprocessor[4687:16684] Generated AppIntents SSU YAML files in file:///Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Intermediates.noindex/CanliCeviri.build/Release-iphoneos/CanliCeviri.build/ssu/
+2026-11-02 17:48:55.991 appintentsnltrainingprocessor[4687:16684] Copied AppIntents SSU YAML files to file:///Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Products/Release-iphoneos/CanliCeviri.app/Metadata.appintents/
+Archiving all locales.
+[------------------------------------------------------------] 0% archiving tr[🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢------------------------------] 50% archived tr[🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢------------------------------] 50% archiving en[🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢] 100% archived en[🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢] 100% archived 2 locales/Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Products/Release-iphoneos/CanliCeviri.app/tr.lproj/nlu.appintents
+/Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Products/Release-iphoneos/CanliCeviri.app/tr.lproj/nlu.appintents/f5bb4a268890e379f5743d7bba2f075d.version
+/Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Products/Release-iphoneos/CanliCeviri.app/en.lproj/nlu.appintents
+/Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Products/Release-iphoneos/CanliCeviri.app/en.lproj/nlu.appintents/cc033b984e486f2081e9d3fdf9b0d01a.version
+
+
+RegisterExecutionPolicyException /Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Products/Release-iphoneos/CanliCeviri.app (in target 'CanliCeviri' from project 'CanliCeviri')
+    cd /Users/runner/work/canli-ceviri/canli-ceviri
+    builtin-RegisterExecutionPolicyException /Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Products/Release-iphoneos/CanliCeviri.app
+
+Validate /Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Products/Release-iphoneos/CanliCeviri.app (in target 'CanliCeviri' from project 'CanliCeviri')
+    cd /Users/runner/work/canli-ceviri/canli-ceviri
+    builtin-validationUtility /Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Products/Release-iphoneos/CanliCeviri.app -shallow-bundle -infoplist-subpath Info.plist
+
+Touch /Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Products/Release-iphoneos/CanliCeviri.app (in target 'CanliCeviri' from project 'CanliCeviri')
+    cd /Users/runner/work/canli-ceviri/canli-ceviri
+    /usr/bin/touch -c /Users/runner/work/canli-ceviri/canli-ceviri/build/Build/Products/Release-iphoneos/CanliCeviri.app
+
+** BUILD SUCCEEDED **
+
