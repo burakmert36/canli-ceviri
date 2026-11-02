@@ -39,7 +39,7 @@ final class AudioReceiver {
     /// Uzantı bağlandı / koptu (alıcı kuyruğunda çağrılır).
     var onConnectionChange: ((Bool) -> Void)?
 
-    private let queue = DispatchQueue(label: "canliceviri.receiver")
+    private let queue = DispatchQueue(label: "canliceviri.receiver", autoreleaseFrequency: .workItem)
     private var listener: NWListener?
     private var connection: NWConnection?
     private var buffer = Data()

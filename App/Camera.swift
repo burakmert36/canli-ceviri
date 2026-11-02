@@ -22,7 +22,7 @@ final class CameraCapture: NSObject, ObservableObject, AVCaptureVideoDataOutputS
     /// Kamera Denetimi (iPhone 16/17) bu cihazda kullanılabiliyor mu?
     @Published private(set) var hasCameraControl = false
 
-    private let queue = DispatchQueue(label: "canliceviri.camera", qos: .userInitiated)
+    private let queue = DispatchQueue(label: "canliceviri.camera", qos: .userInitiated, autoreleaseFrequency: .workItem)
     private let output = AVCaptureVideoDataOutput()
     private(set) var device: AVCaptureDevice?
     private var configured = false

@@ -34,7 +34,7 @@ final class AudioSender {
     private let audioLock = NSLock()
     private var audioEnabled = true
 
-    private let queue = DispatchQueue(label: "canliceviri.sender")
+    private let queue = DispatchQueue(label: "canliceviri.sender", autoreleaseFrequency: .workItem)
     private var connection: NWConnection?
     private var ready = false
     private var stopped = false

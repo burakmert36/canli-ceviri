@@ -146,9 +146,13 @@ final class CanliCeviriUITests: XCTestCase {
         launch()
         tab("Ekran")
         let google = app.buttons["engine-google"]
-        XCTAssertTrue(google.waitForExistence(timeout: 5), "Çeviri motoru kartları yok")
+        // Form satırları ekrana gelince oluşturulur: önce kaydır
         var n = 0
-        while !google.isHittable && n < 6 { app.swipeUp(); n += 1 }
+        while !(google.exists && google.isHittable) && n < 8 {
+            app.swipeUp(velocity: .slow)
+            n += 1
+        }
+        XCTAssertTrue(google.waitForExistence(timeout: 3), "Çeviri motoru kartları yok")
         for id in ["gemini", "openai", "claude", "google", "apple", "appleAI"] {
             let chip = app.buttons["engine-" + id]
             guard chip.exists, reveal(chip) else { XCTFail("Motor kartı yok/görünmüyor: \(id)"); continue }

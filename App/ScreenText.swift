@@ -12,7 +12,8 @@ struct OCRLine {
 
 /// Ekran karelerinden yazı okur (Vision). Meşgulken gelen kareler atlanır.
 final class ScreenTextReader {
-    private let queue = DispatchQueue(label: "canliceviri.ocr", qos: .userInitiated)
+    /// Her iş biriminden sonra geçici Vision nesneleri bırakılır (sürekli okumada bellek birikmesin).
+    private let queue = DispatchQueue(label: "canliceviri.ocr", qos: .userInitiated, autoreleaseFrequency: .workItem)
     private let lock = NSLock()
     private var busy = false
     /// Okuma alanları (sol üst köşe başlangıçlı, 0–1): dikey ve yatay görüntü için ayrı
@@ -169,6 +170,10 @@ final class ScreenTextReader {
     }
 
     private static func recognize(_ f: ScreenFrame, area: CGRect, languages: [String]?, fast: Bool) -> [OCRLine] {
+        autoreleasepool { recognizeInPool(f, area: area, languages: languages, fast: fast) }
+    }
+
+    private static func recognizeInPool(_ f: ScreenFrame, area: CGRect, languages: [String]?, fast: Bool) -> [OCRLine] {
         guard let pb = makePixelBuffer(f) else { return [] }
         let req = VNRecognizeTextRequest()
         req.recognitionLevel = fast ? .fast : .accurate

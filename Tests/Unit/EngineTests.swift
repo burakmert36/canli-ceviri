@@ -108,9 +108,11 @@ final class EngineTests: XCTestCase {
         }
         XCTAssertTrue(ok, "orijinal: \(engine.shownOriginal) | çeviri: \(engine.shownTranslation) | durum: \(engine.status)")
         XCTAssertFalse(engine.shownOriginal.lowercased().contains("title"), "Başlık alan dışında kalmalı")
-        // Kayan altyazı tekrar etmemeli
+        // Kayan altyazı tekrar etmemeli (kutuda son kesinleşen + canlı cümle görünür)
         let o = engine.shownOriginal.lowercased()
-        XCTAssertEqual(o.components(separatedBy: "friend").count - 1, 1, "Tekrarlanan kelimeler: \(o)")
+        XCTAssertLessThanOrEqual(o.components(separatedBy: "friend").count - 1, 1, "Tekrarlanan kelimeler: \(o)")
+        XCTAssertFalse(o.contains("good friend my good"), "Tekrarlanan kelimeler: \(o)")
+        XCTAssertEqual(o.components(separatedBy: "today").count - 1, 1, "Tekrarlanan kelimeler: \(o)")
     }
 
     func testOwnAppForegroundIsNotRead() {
@@ -185,14 +187,22 @@ final class EngineTests: XCTestCase {
             return Wire.frame(width: pw, height: ph, orientation: 1,
                               pixels: FakeScreen.gray(width: pw, height: ph, texts: [(cap, 0.29)], noiseSeed: i))
         }
-        let before = memoryFootprintMB()
-        let start = Date()
-        var sent = 0
-        while Date().timeIntervalSince(start) < 8 {
-            c.send(frames[sent % frames.count])
-            sent += 1
-            spin(0.02)
+        func flood(_ seconds: TimeInterval) -> Int {
+            let start = Date()
+            var n = 0
+            while Date().timeIntervalSince(start) < seconds {
+                c.send(frames[n % frames.count])
+                n += 1
+                spin(0.02)
+            }
+            return n
         }
+        // Isınma: yazı tanıma modelinin ilk yüklenmesi (bir kerelik, sızıntı değil) ölçüme girmesin.
+        _ = flood(3)
+        spin(0.5)
+        let before = memoryFootprintMB()
+        let sent = flood(8)
+        spin(0.5)
         XCTAssertGreaterThan(sent, 100)
         // Duraklat / devam hâlâ anında çalışmalı
         engine.togglePause()
