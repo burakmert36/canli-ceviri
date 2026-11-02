@@ -19,17 +19,49 @@ struct ScreenFrame {
     }
 }
 
+/// Bağlantı olaylarının kısa günlüğü (Ayarlar › Bağlantı tanısı). Sorun olduğunda nerede koptuğunu gösterir.
+final class ConnectionLog {
+    static let shared = ConnectionLog()
+    private let lock = NSLock()
+    private var items: [String] = []
+    private static let fmt: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm:ss.SSS"
+        return f
+    }()
+
+    func add(_ s: String) {
+        let line = Self.fmt.string(from: Date()) + "  " + s
+        lock.lock()
+        items.append(line)
+        if items.count > 120 { items.removeFirst(items.count - 120) }
+        lock.unlock()
+    }
+
+    var entries: [String] { lock.lock(); defer { lock.unlock() }; return items }
+}
+
 /// Yayın uzantısından gelen ses ve görüntüyü yalnızca 127.0.0.1 üzerinden dinler.
-/// Mesaj biçimi: [tür 1 bayt][uzunluk 4 bayt LE][veri] — 'A' ses, 'F' ekran karesi.
-/// Uzantıya giden tek baytlık komutlar: 'S' yayını kapat, 'V'/'W'/'v' görüntü sık/seyrek/kapalı, 'M'/'m' ses açık/kapalı.
+/// Mesaj biçimi: [tür 1 bayt][uzunluk 4 bayt LE][veri] — 'A' ses, 'F' ekran karesi, 'H' uzantı nabzı (saniyede bir).
+/// Uzantıya giden tek baytlık komutlar: 'S' yayını kapat, 'V'/'W'/'v' görüntü sık/seyrek/kapalı, 'M'/'m' ses açık/kapalı,
+/// 'K' uygulama nabzı (saniyede bir).
+///
+/// Kopukluklara karşı:
+/// - iOS, askıya alınan uygulamanın dinleme soketini sessizce geri alabilir (Apple TN2277). Bu yüzden dinleyici
+///   `restartListener` ile yeniden açılabilir (uygulama öne gelince ve yayın beklenirken).
+/// - İki taraf saniyede bir nabız gönderir; 3,5 sn ses gelmeyen bağlantı ölü sayılıp kapatılır, uzantı yeniden bağlanır.
 final class AudioReceiver {
     static let port: UInt16 = 47321
     static let maxMessage = 16 * 1024 * 1024
+    /// Bu kadar süre uzantıdan hiçbir şey gelmezse bağlantı ölü sayılır.
+    static let staleAfter: TimeInterval = 3.5
 
     let port: UInt16
+    let log: ConnectionLog
 
-    init(port: UInt16 = AudioReceiver.port) {
+    init(port: UInt16 = AudioReceiver.port, log: ConnectionLog = .shared) {
         self.port = port
+        self.log = log
     }
 
     /// Ses örnekleri (alıcı kuyruğunda çağrılır).
@@ -42,9 +74,21 @@ final class AudioReceiver {
     private let queue = DispatchQueue(label: "canliceviri.receiver", autoreleaseFrequency: .workItem)
     private var listener: NWListener?
     private var connection: NWConnection?
+    private var connectionReady = false
     private var buffer = Data()
     private var videoMode: VideoMode = .off
     private var audioEnabled = true
+    private var lastMessageAt = Date.distantPast
+    private var timer: DispatchSourceTimer?
+    private var closed = false
+    private var peer: String?
+    private let stateLock = NSLock()
+    private var _isConnected = false
+
+    /// Uzantı şu an bağlı mı? (her iş parçacığından okunabilir)
+    var isConnected: Bool { stateLock.lock(); defer { stateLock.unlock() }; return _isConnected }
+    /// Uzantının son bildirdiği bilgi (sürüm, çalışma süresi, yeniden bağlanma sayısı).
+    var peerInfo: String? { stateLock.lock(); defer { stateLock.unlock() }; return peer }
 
     /// Uzantıdan istenen ekran görüntüsü sıklığı.
     enum VideoMode {
@@ -52,7 +96,7 @@ final class AudioReceiver {
         var command: String {
             switch self {
             case .off: return "v"
-            case .fast: return "V"   // ~2,5 kare/sn (altyazı akarken)
+            case .fast: return "V"   // ~3 kare/sn (altyazı akarken)
             case .slow: return "W"   // ~1 kare/sn (altyazı yokken / pil tasarrufunda)
             }
         }
@@ -60,7 +104,27 @@ final class AudioReceiver {
 
     /// Dinlemeyi başlatır (zaten dinliyorsa bir şey yapmaz).
     func ensureListening() {
-        queue.async { self.startListener() }
+        queue.async {
+            self.closed = false
+            self.startListener()
+            self.startTimer()
+        }
+    }
+
+    /// Dinleyiciyi kapatıp yeniden açar. Açık bağlantıya dokunmaz.
+    /// iOS askıya alınan uygulamanın dinleme soketini geri alabildiği için uygulama öne gelince ve
+    /// yayın beklenirken çağrılır.
+    func restartListener(reason: String) {
+        queue.async {
+            guard !self.closed else { return }
+            self.log.add("dinleyici yenileniyor (\(reason))")
+            if let old = self.listener {
+                self.listener = nil
+                old.cancel()
+            }
+            self.startListener()
+            self.startTimer()
+        }
     }
 
     /// Uzantıdan ekran görüntüsü istenip istenmediğini ve sıklığını ayarlar.
@@ -83,8 +147,12 @@ final class AudioReceiver {
     /// Dinlemeyi tamamen kapatır (testler için).
     func shutdown() {
         queue.sync {
+            self.closed = true
+            self.timer?.cancel()
+            self.timer = nil
             self.connection?.cancel()
             self.connection = nil
+            self.setConnected(false)
             let l = self.listener
             self.listener = nil
             l?.cancel()
@@ -97,13 +165,37 @@ final class AudioReceiver {
         queue.async { self.sendCommand("S") }
     }
 
+    private func setConnected(_ c: Bool) {
+        stateLock.lock(); _isConnected = c; if !c { peer = nil }; stateLock.unlock()
+    }
+
     private func sendCommand(_ c: String) {
-        guard let conn = connection else { return }
+        guard let conn = connection, connectionReady else { return }
         conn.send(content: Data(c.utf8), completion: .contentProcessed { _ in })
     }
 
+    /// Saniyede bir: uzantıya nabız gönder, sessiz kalan (ölü) bağlantıyı kapat.
+    private func startTimer() {
+        guard timer == nil else { return }
+        let t = DispatchSource.makeTimerSource(queue: queue)
+        t.schedule(deadline: .now() + 1, repeating: 1, leeway: .milliseconds(100))
+        t.setEventHandler { [weak self] in self?.heartbeat() }
+        t.resume()
+        timer = t
+    }
+
+    private func heartbeat() {
+        guard let conn = connection, connectionReady else { return }
+        if Date().timeIntervalSince(lastMessageAt) > Self.staleAfter {
+            log.add("uzantıdan \(Int(Self.staleAfter)) sn ses yok → bağlantı kapatıldı (uzantı yeniden bağlanacak)")
+            conn.cancel()
+            return
+        }
+        sendCommand("K")
+    }
+
     private func startListener() {
-        guard listener == nil, let port = NWEndpoint.Port(rawValue: self.port) else { return }
+        guard !closed, listener == nil, let port = NWEndpoint.Port(rawValue: self.port) else { return }
         let params = NWParameters.tcp
         params.requiredInterfaceType = .loopback
         params.allowLocalEndpointReuse = true
@@ -113,39 +205,61 @@ final class AudioReceiver {
             l.stateUpdateHandler = { [weak self, weak l] state in
                 guard let self = self else { return }
                 switch state {
-                case .failed, .cancelled:
-                    if self.listener === l {
-                        self.listener = nil
-                        self.queue.asyncAfter(deadline: .now() + 1) { self.startListener() }
-                    }
+                case .ready:
+                    self.log.add("dinleyici hazır (port \(self.port))")
+                case .waiting(let e):
+                    // Örn. port henüz bırakılmadı: kapatıp yeniden dene.
+                    self.log.add("dinleyici bekliyor: \(e)")
+                    if self.listener === l { self.listener = nil; l?.cancel(); self.retryListener() }
+                case .failed(let e):
+                    self.log.add("dinleyici hata: \(e)")
+                    if self.listener === l { self.listener = nil; self.retryListener() }
+                case .cancelled:
+                    if self.listener === l { self.listener = nil; self.retryListener() }
                 default: break
                 }
             }
             listener = l
             l.start(queue: queue)
         } catch {
-            queue.asyncAfter(deadline: .now() + 1) { self.startListener() }
+            log.add("dinleyici açılamadı: \(error)")
+            retryListener()
         }
     }
 
+    private func retryListener() {
+        queue.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.startListener() }
+    }
+
     private func accept(_ conn: NWConnection) {
-        connection?.cancel()
+        if let old = connection {
+            log.add("yeni uzantı bağlantısı eskisinin yerini aldı")
+            old.cancel()
+        }
         connection = conn
+        connectionReady = false
         buffer.removeAll()
+        lastMessageAt = Date()
         conn.stateUpdateHandler = { [weak self, weak conn] state in
-            guard let self = self else { return }
+            guard let self = self, let c = conn, self.connection === c else { return }
             switch state {
             case .ready:
-                if let c = conn, self.connection === c {
-                    // Yeni bağlanan uzantıya güncel istekleri bildir.
-                    if self.videoMode != .off { self.sendCommand(self.videoMode.command) }
-                    if !self.audioEnabled { self.sendCommand("m") }
-                }
+                self.connectionReady = true
+                self.lastMessageAt = Date()
+                self.setConnected(true)
+                self.log.add("uzantı bağlandı")
+                // Yeni bağlanan uzantıya güncel istekleri bildir.
+                if self.videoMode != .off { self.sendCommand(self.videoMode.command) }
+                if !self.audioEnabled { self.sendCommand("m") }
                 self.onConnectionChange?(true)
             case .failed, .cancelled:
-                if let c = conn, self.connection === c {
-                    self.connection = nil
-                    self.buffer.removeAll()
+                let wasReady = self.connectionReady
+                self.connection = nil
+                self.connectionReady = false
+                self.buffer.removeAll()
+                self.setConnected(false)
+                if wasReady {
+                    self.log.add("uzantı bağlantısı kapandı")
                     self.onConnectionChange?(false)
                 }
             default: break
@@ -159,6 +273,7 @@ final class AudioReceiver {
         conn.receive(minimumIncompleteLength: 1, maximumLength: 1024 * 1024) { [weak self] data, _, isComplete, error in
             guard let self = self else { return }
             if let data = data, !data.isEmpty, self.connection === conn {
+                self.lastMessageAt = Date()
                 self.buffer.append(data)
                 self.parse()
             }
@@ -176,8 +291,10 @@ final class AudioReceiver {
             let type = buffer[offset]
             let len = Int(buffer[offset + 1]) | Int(buffer[offset + 2]) << 8
                 | Int(buffer[offset + 3]) << 16 | Int(buffer[offset + 4]) << 24
-            guard len >= 0, len <= Self.maxMessage, type == UInt8(ascii: "A") || type == UInt8(ascii: "F") else {
+            let known = type == UInt8(ascii: "A") || type == UInt8(ascii: "F") || type == UInt8(ascii: "H")
+            guard len >= 0, len <= Self.maxMessage, known else {
                 // Bozuk veri: bağlantıyı yeniden kur.
+                log.add("bozuk veri (tür \(type), uzunluk \(len)) → bağlantı yenileniyor")
                 buffer.removeAll()
                 connection?.cancel()
                 return
@@ -186,11 +303,25 @@ final class AudioReceiver {
             let start = offset + 5
             let payload = buffer.subdata(in: start..<(start + len))
             offset = start + len
-            if type == UInt8(ascii: "A") { handleAudio(payload) } else { handleFrame(payload) }
+            switch type {
+            case UInt8(ascii: "A"): handleAudio(payload)
+            case UInt8(ascii: "F"): handleFrame(payload)
+            default: handleHello(payload)
+            }
         }
         if offset > buffer.startIndex {
             buffer.removeSubrange(buffer.startIndex..<offset)
         }
+    }
+
+    /// Uzantı nabzı: "v=3.4;up=12;rc=0;drop=0" gibi kısa bilgi.
+    private func handleHello(_ data: Data) {
+        let info = String(decoding: data.prefix(200), as: UTF8.self)
+        stateLock.lock()
+        let first = peer == nil
+        peer = info
+        stateLock.unlock()
+        if first { log.add("uzantı bilgisi: \(info)") }
     }
 
     private func handleAudio(_ data: Data) {

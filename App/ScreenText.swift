@@ -30,10 +30,20 @@ final class ScreenTextReader {
     private var lastSignature: [Float] = []
     private var lastOCRAt = Date.distantPast
 
+    // Gerçek yön tespiti (ekran modu). iOS kareyi telefonun fiziksel yönüne göre etiketler; ekran döndürme
+    // kilidi açıkken YouTube tam ekranı yatay çizse de "dikey" der. Yön, görüntüdeki yazılardan anlaşılır.
+    private var probeEnabled = false                          // lock
+    private var resolvedFor: CGImagePropertyOrientation?      // lock: kararın geçerli olduğu bildirilen yön
+    private var resolvedActual: CGImagePropertyOrientation?   // lock: gerçek yön
+    private var lastProbeAt = Date.distantPast                // yalnızca kuyrukta
+    private var lastProbeConclusive = false                   // yalnızca kuyrukta
+    private var probeSignature: [Float] = []                  // yalnızca kuyrukta
+
     /// Okunan satırlar (ana iş parçacığında çağrılır).
     var onResult: (([OCRLine], ScreenFrame) -> Void)?
 
-    func configure(portrait: CGRect, landscape: CGRect, auto: Bool, sourceLang: String, fast wantsFast: Bool = false) {
+    func configure(portrait: CGRect, landscape: CGRect, auto: Bool, sourceLang: String, fast wantsFast: Bool = false,
+                   probeOrientation: Bool = false) {
         // Hızlı seviye yalnızca bazı Latin alfabeli dilleri destekler; desteklemiyorsa doğru seviyede kal.
         let fastLangs = wantsFast ? Self.visionLanguages(for: sourceLang, level: .fast) : nil
         let useFast = wantsFast && (sourceLang == "auto" ? false : fastLangs != nil)
@@ -45,7 +55,27 @@ final class ScreenTextReader {
         autoArea = auto
         languages = langs
         fast = useFast
+        if probeOrientation != probeEnabled {
+            probeEnabled = probeOrientation
+            resolvedFor = nil
+            resolvedActual = nil
+        }
         lock.unlock()
+    }
+
+    /// Görüntüden anlaşılan gerçek yön uygulanmış kare (karar yoksa kare olduğu gibi döner). Her iş parçacığından çağrılabilir.
+    func resolve(_ f: ScreenFrame) -> ScreenFrame {
+        lock.lock()
+        let on = probeEnabled, reported = resolvedFor, actual = resolvedActual
+        lock.unlock()
+        guard on, let r = reported, let a = actual, r == f.orientation, a != f.orientation else { return f }
+        return ScreenFrame(width: f.width, height: f.height, orientation: a, pixels: f.pixels, time: f.time)
+    }
+
+    /// Son kararla gerçek yön (test ve tanı için).
+    var resolvedOrientation: CGImagePropertyOrientation? {
+        lock.lock(); defer { lock.unlock() }
+        return resolvedActual
     }
 
     /// Otomatik bulunan video alanı (yoksa nil).
@@ -80,14 +110,18 @@ final class ScreenTextReader {
     }
 
     /// Kareyi sıraya koyar; önceki kare hâlâ işleniyorsa atlar.
-    func submit(_ frame: ScreenFrame) {
+    func submit(_ raw: ScreenFrame) {
         lock.lock()
         if busy { lock.unlock(); return }
         busy = true
-        let manual = frame.isLandscape ? landscapeArea : portraitArea
-        let langs = languages, auto = autoArea, useFast = fast
+        let portrait = portraitArea, landscape = landscapeArea
+        let langs = languages, auto = autoArea, useFast = fast, probe = probeEnabled
         lock.unlock()
         queue.async {
+            // Gerçek yönü (gerektiğinde) görüntüden belirle ve uygula.
+            if probe { self.probeIfNeeded(raw) }
+            let frame = self.resolve(raw)
+            let manual = frame.isLandscape ? landscape : portrait
             var target: CGRect? = manual
             if auto {
                 // Videonun oynadığı (sürekli değişen) bölgeyi bul; başlık, yorum, menü gibi sabit yerleri okuma.
@@ -121,6 +155,69 @@ final class ScreenTextReader {
             let lines = Self.recognize(frame, area: a, languages: langs, fast: false)
             DispatchQueue.main.async { completion(lines) }
         }
+    }
+
+    // MARK: Gerçek yön tespiti
+
+    /// Gerekiyorsa (ilk kare, cihaz yönü değişti, sahne büyük ölçüde değişti, karar belirsiz ya da 5 sn geçti)
+    /// görüntüyü üç yönde hızlı okuyup en çok anlamlı yazının çıktığı yönü seçer. Yalnızca OCR kuyruğunda.
+    private func probeIfNeeded(_ f: ScreenFrame) {
+        let now = Date()
+        lock.lock(); let reported = resolvedFor, previous = resolvedActual; lock.unlock()
+        let sig = Self.signature(f, area: CGRect(x: 0, y: 0, width: 1, height: 1))
+        let changed = probeSignature.count != sig.count || Self.meanDifference(sig, probeSignature) > 18
+        let elapsed = now.timeIntervalSince(lastProbeAt)
+        let due = reported != f.orientation
+            || (!lastProbeConclusive && elapsed > 1)
+            || (changed && elapsed > 1)
+            || elapsed > 5
+        guard due else { return }
+        lastProbeAt = now
+        probeSignature = sig
+
+        var candidates: [CGImagePropertyOrientation] = [f.orientation]
+        for o in [CGImagePropertyOrientation.up, .left, .right] where !candidates.contains(o) { candidates.append(o) }
+        let scores = Self.textScores(f, candidates)
+        let current = (reported == f.orientation ? previous : nil) ?? f.orientation
+        let currentScore = scores.first { $0.0 == current }?.1 ?? 0
+        guard let best = scores.max(by: { $0.1 < $1.1 }) else { return }
+        lastProbeConclusive = best.1 >= Self.minProbeScore
+        var actual = current
+        if best.0 != current, best.1 >= Self.minProbeScore, best.1 > currentScore * 1.4 { actual = best.0 }
+        lock.lock(); resolvedFor = f.orientation; resolvedActual = actual; lock.unlock()
+    }
+
+    /// Bir yönde "anlamlı yazı" puanı için alt sınır (≈ 15–20 harflik net bir altyazı satırı).
+    static let minProbeScore: Float = 15
+
+    /// Her aday yön için hızlı yazı tanıma puanı: güvenle okunan harf sayısı.
+    private static func textScores(_ f: ScreenFrame, _ candidates: [CGImagePropertyOrientation])
+        -> [(CGImagePropertyOrientation, Float)] {
+        autoreleasepool {
+            guard let pb = makePixelBuffer(f, crop: nil) else { return candidates.map { ($0, 0) } }
+            return candidates.map { o in
+                let req = VNRecognizeTextRequest()
+                req.recognitionLevel = .fast
+                req.usesLanguageCorrection = false
+                req.minimumTextHeight = 0.012
+                let handler = VNImageRequestHandler(cvPixelBuffer: pb, orientation: o, options: [:])
+                do { try handler.perform([req]) } catch { return (o, 0) }
+                var score: Float = 0
+                for obs in req.results ?? [] {
+                    guard let c = obs.topCandidates(1).first, c.confidence >= 0.3 else { continue }
+                    let letters = c.string.unicodeScalars.filter { CharacterSet.letters.contains($0) }.count
+                    if letters >= 3 { score += Float(letters) * c.confidence }
+                }
+                return (o, score)
+            }
+        }
+    }
+
+    private static func meanDifference(_ a: [Float], _ b: [Float]) -> Float {
+        guard a.count == b.count, !a.isEmpty else { return .greatestFiniteMagnitude }
+        var d: Float = 0
+        for i in 0..<a.count { d += abs(a[i] - b[i]) }
+        return d / Float(a.count)
     }
 
     /// Okuma alanının kaba parlaklık haritası (16×8).
@@ -174,18 +271,24 @@ final class ScreenTextReader {
     }
 
     private static func recognizeInPool(_ f: ScreenFrame, area: CGRect, languages: [String]?, fast: Bool) -> [OCRLine] {
-        guard let pb = makePixelBuffer(f) else { return [] }
+        // Yalnızca okuma alanını kopyala (tüm kareyi değil): daha az bellek trafiği, daha hızlı tanıma.
+        let raw = MotionRegionDetector.raw(fromOriented: area, f.orientation)
+        let x0 = max(0, min(f.width - 1, Int((raw.minX * CGFloat(f.width)).rounded(.down))))
+        let y0 = max(0, min(f.height - 1, Int((raw.minY * CGFloat(f.height)).rounded(.down))))
+        let x1 = max(x0 + 1, min(f.width, Int((raw.maxX * CGFloat(f.width)).rounded(.up))))
+        let y1 = max(y0 + 1, min(f.height, Int((raw.maxY * CGFloat(f.height)).rounded(.up))))
+        let crop = (x: x0, y: y0, w: x1 - x0, h: y1 - y0)
+        guard crop.w >= 8, crop.h >= 8, let pb = makePixelBuffer(f, crop: crop) else { return [] }
         let req = VNRecognizeTextRequest()
         req.recognitionLevel = fast ? .fast : .accurate
         req.usesLanguageCorrection = true
-        req.minimumTextHeight = 0.012
+        // Kırpılmış görüntüye göre: tüm ekranın ~%1,2'si kadar küçük yazıları atla (arayüz kırıntıları).
+        req.minimumTextHeight = Float(min(0.1, 0.012 / max(0.05, Double(area.height))))
         if let l = languages {
             req.recognitionLanguages = l
         } else {
             req.automaticallyDetectsLanguage = true
         }
-        // Vision'da y ekseni aşağıdan yukarıdır.
-        req.regionOfInterest = CGRect(x: area.minX, y: 1 - area.maxY, width: area.width, height: area.height)
         let handler = VNImageRequestHandler(cvPixelBuffer: pb, orientation: f.orientation, options: [:])
         do { try handler.perform([req]) } catch { return [] }
         let observations = req.results ?? []
@@ -201,10 +304,14 @@ final class ScreenTextReader {
         }
     }
 
-    private static func makePixelBuffer(_ f: ScreenFrame) -> CVPixelBuffer? {
+    /// Karenin (ya da ham koordinatlardaki bir parçasının) gri piksel tamponu.
+    private static func makePixelBuffer(_ f: ScreenFrame, crop: (x: Int, y: Int, w: Int, h: Int)?) -> CVPixelBuffer? {
+        let c = crop ?? (x: 0, y: 0, w: f.width, h: f.height)
+        guard c.w > 0, c.h > 0, c.x >= 0, c.y >= 0, c.x + c.w <= f.width, c.y + c.h <= f.height,
+              f.pixels.count >= f.width * f.height else { return nil }
         var out: CVPixelBuffer?
         let attrs: [CFString: Any] = [kCVPixelBufferIOSurfacePropertiesKey: [:] as CFDictionary]
-        guard CVPixelBufferCreate(kCFAllocatorDefault, f.width, f.height, kCVPixelFormatType_OneComponent8,
+        guard CVPixelBufferCreate(kCFAllocatorDefault, c.w, c.h, kCVPixelFormatType_OneComponent8,
                                   attrs as CFDictionary, &out) == kCVReturnSuccess, let pb = out else { return nil }
         CVPixelBufferLockBaseAddress(pb, [])
         defer { CVPixelBufferUnlockBaseAddress(pb, []) }
@@ -212,8 +319,8 @@ final class ScreenTextReader {
         let bpr = CVPixelBufferGetBytesPerRow(pb)
         f.pixels.withUnsafeBytes { (src: UnsafeRawBufferPointer) in
             guard let s = src.baseAddress else { return }
-            for y in 0..<f.height {
-                memcpy(dst + y * bpr, s + y * f.width, f.width)
+            for y in 0..<c.h {
+                memcpy(dst + y * bpr, s + (c.y + y) * f.width + c.x, c.w)
             }
         }
         return pb

@@ -10,6 +10,7 @@ struct SettingsTab: View {
     @ObservedObject private var power = PowerMonitor.shared
     @State private var downloadConfig: TranslationSession.Configuration?
     @State private var showAdvanced = false
+    @State private var showDiagnostics = false
     @State private var confirmClearHistory = false
 
     private var translating: Bool { s.displayMode != .original }
@@ -29,6 +30,7 @@ struct SettingsTab: View {
                 historySection
                 updatesSection
                 advancedSection
+                diagnosticsSection
                 aboutSection
             }
             .navigationTitle("Ayarlar")
@@ -133,6 +135,9 @@ struct SettingsTab: View {
                 Picker("Ne okunsun", selection: $s.speakTarget) {
                     ForEach(SpeakTarget.allCases) { Text($0.title).tag($0) }
                 }
+                Picker("Okurken videonun sesi", selection: $s.duckMode) {
+                    ForEach(DuckMode.allCases) { Text($0.title).tag($0) }
+                }
                 Picker("Ses", selection: $s.voiceID) {
                     Text("Otomatik (en iyi ses)").tag("")
                     ForEach(voices, id: \.identifier) { v in
@@ -153,7 +158,7 @@ struct SettingsTab: View {
         } header: {
             Text("Seslendirme")
         } footer: {
-            Text("Ücretsizdir, cihazın kendi sesleri kullanılır. Daha doğal bir Türkçe ses için: Ayarlar > Erişilebilirlik > Seslendirilen İçerik > Sesler > Türkçe → “Gelişmiş” sesi indir. Ses modunda, okuma sırasında gelen konuşma kendi sesimizle karışmasın diye atlanır; kamera modunda kulaklık takılıysa hiçbir şey kaçmaz.")
+            Text("Videodaki konuşma ile Türkçe ses karışmasın diye, okuma sırasında YouTube gibi uygulamaların sesi iOS tarafından kısılır ve okuma bitince eski seviyesine döner; telefonun ses düzeyi değişmez. Okuma geride kalırsa biraz hızlanır. Ücretsizdir, cihazın kendi sesleri kullanılır. Daha doğal bir Türkçe ses için: Ayarlar > Erişilebilirlik > Seslendirilen İçerik > Sesler > Türkçe → “Gelişmiş” sesi indir. Ses modunda, okuma sırasında gelen konuşma kendi sesimizle karışmasın diye atlanır; kamera modunda kulaklık takılıysa hiçbir şey kaçmaz.")
         }
     }
 
@@ -346,6 +351,34 @@ struct SettingsTab: View {
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .font(.callout.monospaced())
+        }
+    }
+
+    // MARK: Tanı
+
+    private var diagnosticsSection: some View {
+        Section {
+            DisclosureGroup("Bağlantı tanısı", isExpanded: $showDiagnostics) {
+                TimelineView(.periodic(from: .now, by: 1)) { _ in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Ekran yayını: \(Engine.screenIsCaptured ? "açık" : "kapalı") · Uzantı: \(engine.extensionInfo == nil ? "bağlı değil" : "bağlı")")
+                            .font(.footnote.weight(.semibold))
+                        if let info = engine.extensionInfo {
+                            Text(info).font(.caption2.monospaced()).foregroundStyle(.secondary)
+                        }
+                        ForEach(Array(ConnectionLog.shared.entries.suffix(25).reversed().enumerated()), id: \.offset) { _, line in
+                            Text(line).font(.caption2.monospaced()).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                Button {
+                    UIPasteboard.general.string = ConnectionLog.shared.entries.joined(separator: "\n")
+                } label: {
+                    Label("Günlüğü kopyala", systemImage: "doc.on.doc")
+                }
+            }
+        } footer: {
+            Text("Ekran yayını algılanmazsa buradaki kayıtlar sorunun nerede olduğunu gösterir. Kopyalayıp bana gönderebilirsin.")
         }
     }
 

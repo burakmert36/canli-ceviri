@@ -12,7 +12,8 @@ final class EngineTests: XCTestCase {
     private var savedDefaults: [String: Any] = [:]
     private let keys = ["inputSource", "translator", "displayMode", "sourceLang", "targetLang", "asr", "geminiKey",
                         "historyEnabled", "speakEnabled", "liveTranslation", "batteryMode", "ocrAreaMode",
-                        "portraitArea", "landscapeArea", "recentPairs", "hybridLive", "lines", "contentKind", "claudeKey"]
+                        "portraitArea", "landscapeArea", "recentPairs", "hybridLive", "lines", "contentKind", "claudeKey",
+                        "duckMode"]
 
     override func setUp() {
         super.setUp()
@@ -67,6 +68,7 @@ final class EngineTests: XCTestCase {
             return nil
         }
         client = c
+        c.startHeartbeat()   // gerçek uzantı gibi saniyede bir nabız
         XCTAssertTrue(waitUntil(5) { self.engine.audioConnected }, "Bağlantı algılanmadı", file: file, line: line)
         return c
     }
@@ -291,6 +293,69 @@ final class EngineTests: XCTestCase {
         NetworkMonitor.shared.override = true
         XCTAssertTrue(engine.running)
         engine.stop()
+    }
+
+    // MARK: v3.4 düzeltmeleri
+
+    /// Döndürme kilidi açıkken YouTube tam ekran: iOS kareyi "dikey" etiketler ama içerik yataydır.
+    func testRotationLockedLandscapeEndToEnd() {
+        s.inputSource = .screen
+        spin(0.4)
+        guard let c = connectExtension() else { return }
+        engine.start()
+        func landscape(_ caption: String?) -> Data {
+            var texts: [(String, CGFloat)] = []
+            if let cap = caption { texts.append((cap, 0.8)) }
+            let upright = FakeScreen.gray(width: ph, height: pw, texts: texts, fontSize: 32)
+            return Wire.frame(width: pw, height: ph, orientation: 1, pixels: FakeScreen.rotateCW(upright, width: ph, height: pw))
+        }
+        sendRepeatedly(c, landscape(nil), times: 2)
+        sendRepeatedly(c, landscape("Nobody leaves this room until the storm is over"), times: 6)
+        let ok = waitUntil(15) { self.engine.shownOriginal.lowercased().contains("storm") }
+        XCTAssertTrue(ok, "Kilitli yatay ekranda altyazı okunmalı: \(engine.shownOriginal) | \(engine.status)")
+        XCTAssertTrue(engine.shownTranslation.contains("TR("), engine.shownTranslation)
+    }
+
+    /// Yayın açılmadan Başlat'a basıldı; uzantı geç bağlanıyor (askıdan dönüşte dinleyici yenilenmiş olmalı).
+    func testLateExtensionIsAcceptedWhileWaiting() {
+        s.inputSource = .screen
+        spin(0.4)
+        XCTAssertFalse(engine.audioConnected)
+        engine.start()
+        XCTAssertTrue(engine.running)
+        spin(4.5)   // bu sürede dinleyici en az bir kez yenilenir
+        XCTAssertTrue(ConnectionLog.shared.entries.contains { $0.contains("dinleyici yenileniyor") })
+        guard let c = TCPClient(port: AudioReceiver.port, timeout: 5) else { XCTFail("bağlanılamadı"); return }
+        client = c
+        c.startHeartbeat()
+        XCTAssertTrue(waitUntil(6) { self.engine.audioConnected }, "Geç bağlanan uzantı kabul edilmeli: \(engine.status)")
+        engine.stop()
+    }
+
+    func testDuckingFollowsSettings() {
+        s.inputSource = .screen
+        s.speakEnabled = true
+        s.duckMode = .always
+        spin(0.4)
+        guard connectExtension() != nil else { return }
+        engine.start()
+        spin(0.4)
+        let session = AVAudioSession.sharedInstance()
+        XCTAssertTrue(session.categoryOptions.contains(.duckOthers), "Hep kısık: YouTube sesi kısılmalı")
+        XCTAssertTrue(session.categoryOptions.contains(.mixWithOthers), "Diğer uygulamaların sesi durmamalı")
+        s.duckMode = .never
+        spin(0.6)
+        XCTAssertFalse(session.categoryOptions.contains(.duckOthers))
+        s.duckMode = .whileSpeaking
+        spin(0.6)
+        XCTAssertFalse(session.categoryOptions.contains(.duckOthers), "Okuma yokken kısılmamalı")
+        // Hızlı aç/kapa stresi
+        for i in 0..<20 { s.duckMode = i % 2 == 0 ? .always : .never; spin(0.3) }
+        XCTAssertTrue(engine.running)
+        engine.stop()
+        spin(0.3)
+        XCTAssertFalse(session.categoryOptions.contains(.duckOthers), "Durunca kısma kalkmalı")
+        s.speakEnabled = false
     }
 
     func testHybridDraftIsReplacedByFinalAI() {

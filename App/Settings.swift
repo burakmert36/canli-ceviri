@@ -274,6 +274,19 @@ enum AccentChoice: String, CaseIterable, Identifiable {
     }
 }
 
+/// Sesli okurken diğer uygulamaların (YouTube vb.) sesi ne olsun?
+enum DuckMode: String, CaseIterable, Identifiable {
+    case whileSpeaking, always, never
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .whileSpeaking: return "Konuşurken kıs"
+        case .always: return "Hep kısık"
+        case .never: return "Kısma"
+        }
+    }
+}
+
 enum SpeakTarget: String, CaseIterable, Identifiable {
     case translation, original
     var id: String { rawValue }
@@ -343,6 +356,8 @@ final class AppSettings: ObservableObject {
     @Published var speakTarget: SpeakTarget { didSet { d.set(speakTarget.rawValue, forKey: "speakTarget") } }
     @Published var voiceID: String { didSet { d.set(voiceID, forKey: "voiceID") } }
     @Published var speechRate: Double { didSet { d.set(speechRate, forKey: "speechRate") } }
+    /// Sesli okurken videonun sesini kıs (iOS "ducking": telefonun ses düzeyi değişmez).
+    @Published var duckMode: DuckMode { didSet { d.set(duckMode.rawValue, forKey: "duckMode") } }
 
     // Performans
     @Published var batteryMode: BatteryMode { didSet { d.set(batteryMode.rawValue, forKey: "batteryMode") } }
@@ -454,6 +469,7 @@ final class AppSettings: ObservableObject {
         speakTarget = SpeakTarget(rawValue: d.string(forKey: "speakTarget") ?? "") ?? .translation
         voiceID = d.string(forKey: "voiceID") ?? ""
         speechRate = d.object(forKey: "speechRate") as? Double ?? 0.5
+        duckMode = DuckMode(rawValue: d.string(forKey: "duckMode") ?? "") ?? .whileSpeaking
 
         batteryMode = BatteryMode(rawValue: d.string(forKey: "batteryMode") ?? "") ?? .auto
         liveTranslation = d.object(forKey: "liveTranslation") as? Bool ?? true

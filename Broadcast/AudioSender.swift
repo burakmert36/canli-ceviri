@@ -3,6 +3,7 @@ import Network
 import CoreMedia
 import CoreVideo
 import AudioToolbox
+import Accelerate
 import ReplayKit
 
 /// Yakalanan sesi (ve istenirse küçültülmüş gri ekran görüntüsünü) ana uygulamaya
@@ -12,7 +13,9 @@ import ReplayKit
 ///   'A' → 16 kHz mono Int16 LE ses
 ///   'F' → [genişlik: UInt16 LE][yükseklik: UInt16 LE][yön: UInt8][gri pikseller]
 /// Uygulamadan gelen tek baytlık komutlar: 'S' yayını kapat, 'V' sık görüntü, 'W' seyrek görüntü, 'v' görüntüyü kes,
-/// 'M' sesi gönder, 'm' sesi gönderme (altyazı okunurken ses gereksiz: pil).
+/// 'M' sesi gönder, 'm' sesi gönderme (altyazı okunurken ses gereksiz: pil), 'K' uygulama nabzı.
+/// Uzantı da saniyede bir 'H' nabız mesajı yollar. Uygulamadan 4,5 sn hiçbir şey gelmezse bağlantı ölü sayılır
+/// ve yeniden kurulur (uygulama askıya alınıp geri döndüğünde takılı kalmamak için).
 final class AudioSender {
     static let port: UInt16 = 47321
     static let maxFrameSide = 1300
@@ -31,6 +34,13 @@ final class AudioSender {
     private var pendingBytes = 0
     /// Atlanan mesaj sayısı (tanı için).
     private(set) var droppedMessages = 0
+    /// Uygulamadan son bayt (komut ya da nabız) geldiği an (yalnızca `queue` üzerinde).
+    private var lastFromAppAt = Date()
+    /// Kaç kez yeniden bağlanıldı (tanı için).
+    private(set) var reconnects = 0
+    static let staleAfter: TimeInterval = 4.5
+    /// Bağlantı kurma denemesinin başladığı an (takılı kalan denemeyi kesmek için).
+    private var connectStartedAt = Date()
     private let audioLock = NSLock()
     private var audioEnabled = true
 
@@ -58,6 +68,14 @@ final class AudioSender {
             self.connect()
             self.startWatchdog()
         }
+    }
+
+    /// Uzantı nabzı: uygulama bağlantının canlı olduğunu ve uzantının durumunu görür.
+    private func sendHeartbeat() {
+        guard ready, let conn = connection else { return }
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+        let info = "v=\(version);up=\(Int(Date().timeIntervalSince(startedAt)));rc=\(reconnects);drop=\(droppedMessages)"
+        send(Self.message(type: UInt8(ascii: "H"), payload: Data(info.utf8)), on: conn) {}
     }
 
     func stop() {
@@ -191,6 +209,16 @@ final class AudioSender {
             o[4] = orientation
             let px = o + 5
             let src = base.assumingMemoryBound(to: UInt8.self)
+            if planar {
+                // Parlaklık düzlemini donanım hızlandırmalı (Accelerate) küçült: daha az işlemci, daha az ısınma.
+                if f == 1 {
+                    for y in 0..<oh { memcpy(px + y * ow, src + y * bpr, ow) }
+                    return
+                }
+                var s = vImage_Buffer(data: base, height: vImagePixelCount(oh * f), width: vImagePixelCount(ow * f), rowBytes: bpr)
+                var d = vImage_Buffer(data: UnsafeMutableRawPointer(px), height: vImagePixelCount(oh), width: vImagePixelCount(ow), rowBytes: ow)
+                if vImageScale_Planar8(&s, &d, nil, vImage_Flags(kvImageNoFlags)) == kvImageNoError { return }
+            }
             let area = f * f
             for y in 0..<oh {
                 for x in 0..<ow {
@@ -221,6 +249,8 @@ final class AudioSender {
         let conn = NWConnection(host: NWEndpoint.Host("127.0.0.1"), port: port, using: .tcp)
         connection = conn
         pendingBytes = 0
+        lastFromAppAt = Date()
+        connectStartedAt = Date()
         // Yeni bağlantıda varsayılanlara dön; uygulama bağlanınca güncel isteklerini yeniden bildirir.
         setAudio(true)
         setVideo(false)
@@ -231,7 +261,9 @@ final class AudioSender {
                 self.ready = true
                 self.everConnected = true
                 self.lastAliveAt = Date()
+                self.lastFromAppAt = Date()
                 self.receive(on: conn)
+                self.sendHeartbeat()
             case .waiting:
                 // Örn. uygulama henüz dinlemiyor (bağlantı reddedildi) → kapatıp yeniden dene.
                 conn.cancel()
@@ -240,7 +272,8 @@ final class AudioSender {
                     self.ready = false
                     self.connection = nil
                     if !self.stopped {
-                        self.queue.asyncAfter(deadline: .now() + 1.0) { self.connect() }
+                        self.reconnects += 1
+                        self.queue.asyncAfter(deadline: .now() + 0.5) { self.connect() }
                     }
                 }
             default:
@@ -253,13 +286,14 @@ final class AudioSender {
     private func receive(on conn: NWConnection) {
         conn.receive(minimumIncompleteLength: 1, maximumLength: 256) { [weak self] data, _, isComplete, error in
             guard let self = self else { return }
-            if let data = data {
+            if let data = data, !data.isEmpty {
+                self.lastFromAppAt = Date()
                 for byte in data {
                     switch byte {
                     case UInt8(ascii: "S"):
                         self.finish("Canlı çeviri durduruldu.")
                         return
-                    case UInt8(ascii: "V"): self.setVideo(true, interval: 0.4)
+                    case UInt8(ascii: "V"): self.setVideo(true, interval: 0.3)
                     case UInt8(ascii: "W"): self.setVideo(true, interval: 1.0)
                     case UInt8(ascii: "v"): self.setVideo(false)
                     case UInt8(ascii: "M"): self.setAudio(true)
@@ -278,12 +312,26 @@ final class AudioSender {
 
     private func startWatchdog() {
         let t = DispatchSource.makeTimerSource(queue: queue)
-        t.schedule(deadline: .now() + 5, repeating: 5)
+        t.schedule(deadline: .now() + 1, repeating: 1, leeway: .milliseconds(100))
         t.setEventHandler { [weak self] in
             guard let self = self, !self.stopped else { return }
             let now = Date()
-            if self.ready { self.lastAliveAt = now; return }
-            if !self.everConnected && now.timeIntervalSince(self.startedAt) > 45 {
+            if self.ready {
+                if now.timeIntervalSince(self.lastFromAppAt) > Self.staleAfter {
+                    // Uygulama cevap vermiyor (ör. askıdan döndü, eski bağlantı ölü): yeniden bağlan.
+                    self.ready = false
+                    self.connection?.cancel()
+                    return
+                }
+                self.lastAliveAt = now
+                self.sendHeartbeat()
+                return
+            }
+            // Bağlanma denemesi 3 sn'den uzun sürdüyse kes ve yeniden dene.
+            if let c = self.connection, now.timeIntervalSince(self.connectStartedAt) > 3 {
+                c.cancel()
+            }
+            if !self.everConnected && now.timeIntervalSince(self.startedAt) > 90 {
                 self.finish("Önce Canlı Çeviri uygulamasını açıp Başlat'a dokunun.")
             } else if self.everConnected && now.timeIntervalSince(self.lastAliveAt) > 30 {
                 self.finish("Canlı Çeviri uygulaması kapandı.")

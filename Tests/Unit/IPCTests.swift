@@ -138,7 +138,8 @@ final class IPCTests: XCTestCase {
         receiver.setAudioEnabled(false)
         receiver.setVideoMode(.slow)
         receiver.requestBroadcastStop()
-        let got = String(decoding: c.receive(timeout: 1.5), as: UTF8.self)
+        // 'K' uygulamanın saniyelik nabzıdır; komut sırasına karışabilir.
+        let got = String(decoding: c.receive(timeout: 1.5), as: UTF8.self).replacingOccurrences(of: "K", with: "")
         XCTAssertEqual(got, "VmWS")
     }
 
@@ -162,6 +163,56 @@ final class IPCTests: XCTestCase {
         XCTAssertTrue(waitUntil(3) { self.audioCount >= 1 })
         spin(0.3)
         lock.lock(); XCTAssertEqual(audio, [2]); lock.unlock()
+    }
+
+    // MARK: Nabız ve ölü bağlantı (v3.4)
+
+    func testSilentConnectionIsDroppedSoExtensionCanReconnect() {
+        let c = connect()
+        XCTAssertTrue(waitUntil(3) { self.connectCount >= 1 })
+        let start = Date()
+        // Uzantı hiçbir şey göndermiyor (askıdan dönmüş ölü bağlantı gibi)
+        XCTAssertTrue(waitUntil(7) { self.disconnectCount >= 1 }, "Sessiz bağlantı kapatılmalı")
+        let took = Date().timeIntervalSince(start)
+        XCTAssertGreaterThan(took, 3.0)
+        XCTAssertLessThan(took, 6.0)
+        XCTAssertFalse(receiver.isConnected)
+        c.close()
+    }
+
+    func testHeartbeatKeepsConnectionAliveAndReportsPeerInfo() {
+        let c = connect()
+        c.startHeartbeat()
+        spin(7)
+        XCTAssertEqual(disconnectCount, 0, "Nabız gelen bağlantı kapatılmamalı")
+        XCTAssertTrue(receiver.isConnected)
+        XCTAssertEqual(receiver.peerInfo, "v=test;up=1;rc=0;drop=0")
+        // Uygulama da saniyede bir 'K' gönderir
+        let got = String(decoding: c.receive(timeout: 2.5), as: UTF8.self)
+        XCTAssertTrue(got.contains("K"), "Uygulama nabzı gelmedi: \(got)")
+        c.close()
+    }
+
+    func testListenerRestartKeepsServing() {
+        // Askıdan dönüşte dinleyici yenilenir; hızlı ardışık yenilemeler de sorun çıkarmamalı.
+        for i in 0..<15 { receiver.restartListener(reason: "test \(i)") }
+        spin(1.5)
+        guard let c = TCPClient(port: port, timeout: 5) else { XCTFail("Yenilenen dinleyiciye bağlanılamadı"); return }
+        c.send(Wire.audio([5, 6]))
+        XCTAssertTrue(waitUntil(5) { self.audioCount == 2 })
+        c.close()
+    }
+
+    func testListenerRestartDoesNotDropActiveConnection() {
+        let c = connect()
+        c.startHeartbeat()
+        XCTAssertTrue(waitUntil(3) { self.connectCount >= 1 })
+        receiver.restartListener(reason: "test")
+        spin(1)
+        c.send(Wire.audio([1, 2, 3]))
+        XCTAssertTrue(waitUntil(3) { self.audioCount == 3 })
+        XCTAssertEqual(disconnectCount, 0)
+        c.close()
     }
 
     /// Stres: 150 kez bağlan → veri gönder → kop.
@@ -208,6 +259,7 @@ final class IPCTests: XCTestCase {
             c.close()
         }
         let c = connect()
+        spin(0.5)
         let before = audioCount
         c.send(Wire.audio([7, 8, 9]))
         XCTAssertTrue(waitUntil(5) { self.audioCount == before + 3 })
@@ -283,6 +335,66 @@ final class SenderReceiverTests: XCTestCase {
         // Durdurma komutu uzantıyı kapatmalı
         receiver.requestBroadcastStop()
         XCTAssertTrue(waitUntil(3) { finished != nil })
+    }
+
+    /// Uygulama yeniden başlarsa (dinleyici kapanıp açılırsa) uzantı kendiliğinden yeniden bağlanmalı.
+    func testSenderReconnectsAfterReceiverRestart() {
+        let port = TestPorts.make()
+        let lock = NSLock()
+        var samples = 0
+        func makeReceiver() -> AudioReceiver {
+            let r = AudioReceiver(port: port)
+            r.onAudio = { s in lock.lock(); samples += s.count; lock.unlock() }
+            r.ensureListening()
+            return r
+        }
+        var receiver = makeReceiver()
+        let sender = AudioSender(port: port)
+        sender.start()
+        defer { sender.stop() }
+        XCTAssertTrue(waitUntil(5) { receiver.isConnected })
+        receiver.shutdown()
+        spin(1.5)
+        receiver = makeReceiver()
+        XCTAssertTrue(waitUntil(6) { receiver.isConnected }, "Uzantı yeniden bağlanmadı")
+        let fmt = SampleFactory.AudioFormat(rate: 48000, channels: 1, bits: 16, float: false, bigEndian: false, nonInterleaved: false)
+        for k in 0..<5 { if let sb = SampleFactory.audio(fmt, frames: 4800, freq: 300, startFrame: k * 4800) { sender.process(sb) } }
+        XCTAssertTrue(waitUntil(5) { lock.lock(); defer { lock.unlock() }; return samples > 6000 })
+        XCTAssertGreaterThan(sender.reconnects, 0)
+        receiver.shutdown()
+    }
+
+    /// Bağlantıyı kabul edip hiç cevap vermeyen (askıda kalmış) uygulama: uzantı bunu fark edip yeniden bağlanmalı.
+    func testSenderDetectsUnresponsiveApp() {
+        let port = TestPorts.make()
+        let listenFD = socket(AF_INET, SOCK_STREAM, 0)
+        var one: Int32 = 1
+        setsockopt(listenFD, SOL_SOCKET, SO_REUSEADDR, &one, socklen_t(MemoryLayout<Int32>.size))
+        var addr = sockaddr_in()
+        addr.sin_family = sa_family_t(AF_INET)
+        addr.sin_port = port.bigEndian
+        addr.sin_addr.s_addr = inet_addr("127.0.0.1")
+        _ = withUnsafePointer(to: &addr) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(listenFD, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) }
+        }
+        listen(listenFD, 8)
+        let accepted = Box(0)
+        let acceptedFDs = Box<[Int32]>([])
+        DispatchQueue(label: "test.accept").async {
+            while true {
+                let fd = accept(listenFD, nil, nil)
+                if fd < 0 { break }
+                accepted.mutate { $0 += 1 }
+                acceptedFDs.mutate { $0.append(fd) }   // açık tut ama hiç yazma
+            }
+        }
+        let sender = AudioSender(port: port)
+        sender.start()
+        XCTAssertTrue(waitUntil(12) { accepted.value >= 2 }, "Uzantı cevapsız uygulamayı fark edip yeniden bağlanmalı (kabul: \(accepted.value))")
+        sender.stop()
+        spin(0.3)
+        close(listenFD)
+        for fd in acceptedFDs.value { close(fd) }
     }
 
     func testBGRAFrameConversion() {

@@ -84,6 +84,8 @@ func memoryFootprintMB() -> Double {
 
 final class TCPClient {
     private(set) var fd: Int32 = -1
+    private let sendLock = NSLock()
+    private var heartbeatTimer: DispatchSourceTimer?
 
     init?(port: UInt16, timeout: TimeInterval = 3) {
         let end = Date().addingTimeInterval(timeout)
@@ -108,8 +110,20 @@ final class TCPClient {
         return nil
     }
 
+    /// Gerçek uzantı gibi saniyede bir 'H' nabzı yollar (uygulama sessiz bağlantıyı 3,5 sn'de kapatır).
+    func startHeartbeat() {
+        guard heartbeatTimer == nil else { return }
+        let t = DispatchSource.makeTimerSource(queue: DispatchQueue.global())
+        t.schedule(deadline: .now() + 0.5, repeating: 1)
+        t.setEventHandler { [weak self] in _ = self?.send(Wire.message("H", Data("v=test;up=1;rc=0;drop=0".utf8))) }
+        t.resume()
+        heartbeatTimer = t
+    }
+
     @discardableResult
     func send(_ data: Data) -> Bool {
+        sendLock.lock()
+        defer { sendLock.unlock() }
         guard fd >= 0 else { return false }
         var sent = 0
         let total = data.count
@@ -146,8 +160,12 @@ final class TCPClient {
     }
 
     func close() {
+        heartbeatTimer?.cancel()
+        heartbeatTimer = nil
+        sendLock.lock()
         if fd >= 0 { Darwin.close(fd) }
         fd = -1
+        sendLock.unlock()
     }
 
     deinit { close() }
@@ -237,6 +255,23 @@ enum FakeScreen {
             ctx.draw(cg, in: CGRect(x: 0, y: 0, width: width, height: height))
         }
         return data
+    }
+
+    /// Görüntüyü saat yönünün tersine 90° çevirir (yön: .right ile dik okunur).
+    static func rotateCCW(_ pixels: Data, width: Int, height: Int) -> Data {
+        var out = Data(count: width * height)
+        pixels.withUnsafeBytes { (src: UnsafeRawBufferPointer) in
+            out.withUnsafeMutableBytes { (dst: UnsafeMutableRawBufferPointer) in
+                let s = src.bindMemory(to: UInt8.self), d = dst.bindMemory(to: UInt8.self)
+                let ow = height
+                for y in 0..<height {
+                    for x in 0..<width {
+                        d[(width - 1 - x) * ow + y] = s[y * width + x]
+                    }
+                }
+            }
+        }
+        return out
     }
 
     /// Dikey görüntüyü saat yönünde 90° çevirerek "ham" yatay kare üretir (yön: .left ile dik okunur).

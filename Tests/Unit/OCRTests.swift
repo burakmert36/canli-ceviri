@@ -91,6 +91,74 @@ final class OCRTests: XCTestCase {
         XCTAssertLessThan(count, 5, "Meşgulken gelen kareler sıraya alınmamalı (bellek ve pil)")
     }
 
+    // MARK: Döndürme kilidi: iOS "dikey" der ama YouTube tam ekranı yatay çizer (v3.4)
+
+    /// Yatay tam ekran video, ama iOS kareyi dikey (.up) etiketliyor.
+    private func lockedLandscapeFrame(caption: String, clockwise: Bool = true) -> ScreenFrame {
+        let upright = FakeScreen.gray(width: ph, height: pw, texts: [(caption, 0.8)], fontSize: 32)
+        let raw = clockwise ? FakeScreen.rotateCW(upright, width: ph, height: pw)
+                            : FakeScreen.rotateCCW(upright, width: ph, height: pw)
+        return ScreenFrame(width: pw, height: ph, orientation: .up, pixels: raw, time: Date())
+    }
+
+    private func submitUntil(_ reader: ScreenTextReader, _ make: () -> ScreenFrame, tries: Int = 6,
+                             until done: (String) -> Bool) -> String {
+        var last = ""
+        var results = 0
+        reader.onResult = { lines, _ in last = lines.map { $0.text }.joined(separator: " ").lowercased(); results += 1 }
+        for _ in 0..<tries {
+            let before = results
+            reader.submit(make())
+            _ = waitUntil(20) { results > before }
+            if done(last) { return last }
+            spin(1.1)   // yön kararı belirsizse 1 sn sonra yeniden yoklanır
+        }
+        return last
+    }
+
+    func testRotationLockedLandscapeIsDetectedAndRead() {
+        for clockwise in [true, false] {
+            let reader = ScreenTextReader()
+            reader.configure(portrait: AppSettings.defaultPortraitArea, landscape: AppSettings.defaultLandscapeArea,
+                             auto: false, sourceLang: "en-US", probeOrientation: true)
+            var n = 0
+            let text = submitUntil(reader, {
+                n += 1
+                return lockedLandscapeFrame(caption: n % 2 == 0 ? "We have to leave this city tonight before the storm"
+                                                                : "We have to leave this city tonight before the storm!",
+                                            clockwise: clockwise)
+            }, until: { $0.contains("city") })
+            XCTAssertTrue(text.contains("city"), "Yatay altyazı okunmalı (saat yönü: \(clockwise)): \(text)")
+            XCTAssertEqual(reader.resolvedOrientation, clockwise ? .left : .right)
+            let resolved = reader.resolve(lockedLandscapeFrame(caption: "x", clockwise: clockwise))
+            XCTAssertTrue(resolved.isLandscape, "Gerçek yön yatay olmalı")
+        }
+    }
+
+    func testPortraitContentStaysPortrait() {
+        let reader = ScreenTextReader()
+        reader.configure(portrait: AppSettings.defaultPortraitArea, landscape: AppSettings.defaultLandscapeArea,
+                         auto: false, sourceLang: "en-US", probeOrientation: true)
+        let text = submitUntil(reader, { portraitFrame(caption: "Portrait caption is here", title: "Some channel title text") },
+                               tries: 3, until: { $0.contains("portrait") })
+        XCTAssertTrue(text.contains("portrait"), text)
+        XCTAssertNotEqual(reader.resolvedOrientation, .left)
+        XCTAssertNotEqual(reader.resolvedOrientation, .right)
+    }
+
+    func testProbeDisabledInCameraModeKeepsReportedOrientation() {
+        let reader = ScreenTextReader()
+        reader.configure(portrait: CGRect(x: 0, y: 0, width: 1, height: 1), landscape: CGRect(x: 0, y: 0, width: 1, height: 1),
+                         auto: false, sourceLang: "en-US", probeOrientation: false)
+        let f = lockedLandscapeFrame(caption: "Camera mode keeps orientation")
+        var got: ScreenFrame?
+        reader.onResult = { _, frame in got = frame }
+        reader.submit(f)
+        XCTAssertTrue(waitUntil(20) { got != nil })
+        XCTAssertEqual(got?.orientation, .up)
+        XCTAssertNil(reader.resolvedOrientation)
+    }
+
     func testClampHandlesInvalidRects() {
         let bad: [CGRect] = [
             CGRect(x: CGFloat.nan, y: 0, width: 1, height: 1),

@@ -70,6 +70,9 @@ final class Engine: ObservableObject {
     private let power = PowerMonitor.shared
     private var lastCaptionAt = Date.distantPast
     private var lastOCRSubmit = Date.distantPast
+    private var lastListenerRestart = Date()
+    /// Okunan son karenin yönü (yön değişince yarım cümle kapatılır).
+    private var lastReadLandscape: Bool?
     private var videoMode: AudioReceiver.VideoMode = .off
     private var lastToggle = Date.distantPast
 
@@ -107,6 +110,9 @@ final class Engine: ObservableObject {
     // Kutuda kısa süreli bilgi (ör. dil değişti)
     private var flashText: String?
     private var flashUntil = Date.distantPast
+
+    // Sesli okurken videonun sesini kısma
+    private var unduckWork: DispatchWorkItem?
 
     #if DEBUG
     /// Testlerde "başka uygulamadayken" ekran okumayı taklit etmek için.
@@ -153,6 +159,7 @@ final class Engine: ObservableObject {
         receiver.ensureListening()
 
         NetworkMonitor.shared.onChange = { [weak self] online in self?.networkChanged(online) }
+        speaker.onBusyChanged = { [weak self] busy in self?.speakerBusyChanged(busy) }
         camera.onSystemZoom = { [weak self] z in
             guard let self = self, abs(self.settings.camZoom - z) > 0.01 else { return }
             self.settings.camZoom = z
@@ -178,8 +185,14 @@ final class Engine: ObservableObject {
 
         let nc = NotificationCenter.default
         nc.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
-            self?.receiver.ensureListening()
-            self?.renderNow()
+            guard let self = self else { return }
+            // iOS, askıdayken dinleme soketini geri almış olabilir (TN2277): bağlı değilsek dinleyiciyi tazele.
+            if self.broadcastConnected {
+                self.receiver.ensureListening()
+            } else {
+                self.receiver.restartListener(reason: "uygulama öne geldi")
+            }
+            self.renderNow()
         }
         nc.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in
             self?.appInBackground = true
@@ -245,7 +258,12 @@ final class Engine: ObservableObject {
             return
         }
         runMode = .screen
-        receiver.ensureListening()
+        ConnectionLog.shared.add("Başlat (ekran modu)")
+        if broadcastConnected {
+            receiver.ensureListening()
+        } else {
+            receiver.restartListener(reason: "Başlat")
+        }
         settings.rememberCurrentPair()
         cfg = c
         service = TranslationService(config: c)
@@ -258,16 +276,41 @@ final class Engine: ObservableObject {
         pip.autoStartWhenBackgrounded = true
         pip.showsSkipButtons = settings.pipButtonsVisible
         audioConnected = broadcastConnected
-        status = broadcastConnected ? connectedStatus : "Ekran yayını bekleniyor…"
+        status = broadcastConnected ? connectedStatus : waitingStatus
         startTimer()
         renderNow()
         pip.start()
+        updateDucking()
 
-        // Ekran yayını açık değilse sistem penceresini aç.
+        // Ekran yayını açık değilse sistem penceresini aç. Yayın zaten açıksa pencereyi tekrar açma
+        // (kullanıcı yanlışlıkla durdurabilir); uzantının bağlanmasını bekle.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { [weak self] in
             guard let self = self, self.running, self.runMode == .screen, !self.broadcastConnected else { return }
-            BroadcastPicker.present()
+            if Self.screenIsCaptured {
+                ConnectionLog.shared.add("yayın zaten açık, uzantının bağlanması bekleniyor")
+                self.status = self.waitingStatus
+                DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in
+                    guard let self = self, self.running, self.runMode == .screen, !self.broadcastConnected else { return }
+                    ConnectionLog.shared.add("6 sn'de bağlanmadı → yayın penceresi açılıyor")
+                    self.status = "Yayın bağlanamadı: açılan pencerede yayını durdurup yeniden başlat."
+                    BroadcastPicker.present()
+                }
+            } else {
+                ConnectionLog.shared.add("yayın penceresi açıldı")
+                BroadcastPicker.present()
+            }
         }
+    }
+
+    /// Ekran şu an yayınlanıyor / kaydediliyor mu? (Yayın açık ama uzantı henüz bağlanmamış olabilir.)
+    static var screenIsCaptured: Bool {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .contains { $0.traitCollection.sceneCaptureState == .active }
+    }
+
+    private var waitingStatus: String {
+        Self.screenIsCaptured ? "Ekran yayını açık — uygulamaya bağlanıyor…" : "Ekran yayını bekleniyor…"
     }
 
     // MARK: - Başlat (kamera / TV modu)
@@ -336,6 +379,7 @@ final class Engine: ObservableObject {
 
     func stop() {
         guard running else { return }
+        ConnectionLog.shared.add("Durdur")
         running = false
         timer?.invalidate()
         timer = nil
@@ -382,6 +426,37 @@ final class Engine: ObservableObject {
     }
 
     func togglePause() { setPaused(!paused) }
+
+    /// Uzantının son bildirdiği bilgi (Ayarlar › Bağlantı tanısı).
+    var extensionInfo: String? { receiver.peerInfo }
+
+    // MARK: Seslendirme sırasında video sesini kısma
+
+    private func speakerBusyChanged(_ busy: Bool) {
+        unduckWork?.cancel()
+        if busy {
+            updateDucking(speaking: true)
+            return
+        }
+        // Cümleler arasında ses inip kalkmasın diye kısa bir bekleme.
+        let w = DispatchWorkItem { [weak self] in self?.updateDucking(speaking: false) }
+        unduckWork = w
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7, execute: w)
+    }
+
+    /// Ayara ve okuma durumuna göre diğer uygulamaların (YouTube) sesini kısar ya da açar.
+    private func updateDucking(speaking: Bool? = nil) {
+        let isSpeaking = speaking ?? speaker.isBusy
+        var want = false
+        if running && runMode == .screen && settings.speakEnabled {
+            switch settings.duckMode {
+            case .always: want = true
+            case .whileSpeaking: want = isSpeaking
+            case .never: want = false
+            }
+        }
+        keepAlive.setDucking(want)
+    }
 
     /// Hızlı dil değiştirme (kutudaki ⏪ ⏩, Eylem Düğmesi kısayolu ya da uygulamadaki çipler).
     @discardableResult
@@ -454,7 +529,8 @@ final class Engine: ObservableObject {
         } else {
             // Video dikey ya da yatay oynarken her biri için kullanıcının seçtiği ayrı alan kullanılır.
             reader.configure(portrait: settings.portraitArea, landscape: settings.landscapeArea,
-                             auto: settings.ocrAreaMode == .auto, sourceLang: lang, fast: saving)
+                             auto: settings.ocrAreaMode == .auto, sourceLang: lang, fast: saving,
+                             probeOrientation: true)
         }
     }
 
@@ -525,11 +601,13 @@ final class Engine: ObservableObject {
         cloudPending.removeAll()
         cloudDone.removeAll()
         cloudInFlight = 0
+        lastReadLandscape = nil
     }
 
     private func settingsChanged() {
         styleVersion += 1
         pip.showsSkipButtons = settings.pipButtonsVisible
+        updateDucking()
         configureReader()
         renderNow()
         guard running else { return }
@@ -597,7 +675,12 @@ final class Engine: ObservableObject {
         guard runMode == .screen else { return }
         audioConnected = connected
         if running {
-            status = connected ? connectedStatus : "Ekran yayını kapandı. Tekrar açmak için ⏺ simgesine dokun."
+            if connected {
+                status = connectedStatus
+            } else {
+                status = Self.screenIsCaptured ? "Yayın bağlantısı koptu — yeniden bağlanıyor…"
+                    : "Ekran yayını kapandı. Tekrar açmak için ⏺ simgesine dokun."
+            }
         } else if connected {
             status = "Yayın açık — çeviri için Başlat'a dokun"
         }
@@ -619,12 +702,14 @@ final class Engine: ObservableObject {
             let next = self.pendingFrame
             self.pendingFrame = nil
             self.frameLock.unlock()
-            guard let frame = next else { return }
+            guard let raw = next else { return }
             // Kendi uygulamamız açıkken ekranda kendi ayarlarımız var; onları okumayalım.
             guard self.readingAllowed else { return }
-            if frame.isLandscape { self.lastLandscapeFrame = frame } else { self.lastPortraitFrame = frame }
+            // Alan seçici için görüntüyü gerçek yönüyle sakla (iOS'un etiketi döndürme kilidinde yanlış olabilir).
+            let shot = self.reader.resolve(raw)
+            if shot.isLandscape { self.lastLandscapeFrame = shot } else { self.lastPortraitFrame = shot }
             guard self.running, self.runMode == .screen, self.screenMode, !self.paused else { return }
-            self.submitForReading(frame)
+            self.submitForReading(raw)
         }
     }
 
@@ -644,7 +729,7 @@ final class Engine: ObservableObject {
     /// Altyazı yokken ya da tasarruf/ısınma durumunda daha seyrek okur.
     private var ocrInterval: TimeInterval {
         let active = Date().timeIntervalSince(lastCaptionAt) < 6
-        var i: TimeInterval = active ? 0.4 : 1.0
+        var i: TimeInterval = active ? 0.3 : 1.0
         if saving { i *= 2 }
         if power.isCritical { i = max(i, 2.5) }
         return i
@@ -652,7 +737,8 @@ final class Engine: ObservableObject {
 
     private func submitForReading(_ frame: ScreenFrame) {
         let now = Date()
-        guard now.timeIntervalSince(lastOCRSubmit) >= ocrInterval else { return }
+        // Kareler uzantıdan ~aynı aralıkla gelir; küçük zamanlama sapmasıyla her ikinci kare atlanmasın diye pay bırakılır.
+        guard now.timeIntervalSince(lastOCRSubmit) >= ocrInterval * 0.75 else { return }
         lastOCRSubmit = now
         reader.submit(frame)
     }
@@ -692,6 +778,15 @@ final class Engine: ObservableObject {
             let (o, t) = displayTexts()
             let exclude = CaptionTracker.normalize(o + " " + t)
             fresh = captions.dynamicLines(lines, exclude: exclude)
+        }
+        // Ekran döndü (dikey ↔ yatay): yarım cümleyi kapat, yeni yönde temiz başla.
+        if runMode == .screen {
+            let land = frame.isLandscape
+            if let prev = lastReadLandscape, prev != land {
+                ConnectionLog.shared.add("ekran yönü değişti → \(land ? "yatay" : "dikey")")
+                if !live.original.isEmpty { commitLive(restart: false) }
+            }
+            lastReadLandscape = land
         }
         guard !fresh.isEmpty else { return }
         lastCaptionAt = Date()
@@ -855,6 +950,12 @@ final class Engine: ObservableObject {
             for id in ids where id == live.id || segmentIndex(id) != nil { translate(id) }
         }
         if runMode == .screen && now.timeIntervalSince(lastRender) > 2.0 { renderNow(force: true) }
+        // Yayın beklenirken dinleyiciyi 3 sn'de bir tazele (askıdan dönen uygulamada soket geri alınmış olabilir).
+        if runMode == .screen && !broadcastConnected && now.timeIntervalSince(lastListenerRestart) > 3 {
+            lastListenerRestart = now
+            receiver.restartListener(reason: "yayın bekleniyor")
+            if status != waitingStatus && !status.hasPrefix("Yayın bağlanamadı") { status = waitingStatus }
+        }
     }
 
     // MARK: - Çeviri
@@ -1041,8 +1142,12 @@ final class Engine: ObservableObject {
 
     func renderNow(force: Bool = false) {
         var (o, t) = displayTexts()
-        if shownOriginal != o { shownOriginal = o }
-        if shownTranslation != t { shownTranslation = t }
+        // Uygulama içindeki metinleri yalnızca görünürken güncelle: arka planda (PiP açıkken) gizli sekmeleri
+        // her altyazıda yeniden çizdirmek boşuna işlemci harcar.
+        if runMode == .camera || UIApplication.shared.applicationState == .active {
+            if shownOriginal != o { shownOriginal = o }
+            if shownTranslation != t { shownTranslation = t }
+        }
         // Kamera modunda kutu uygulamanın içinde gösterilir; PiP kutusu yalnızca ekran modunda.
         if running && runMode == .camera { return }
         var hint: String?
@@ -1054,7 +1159,8 @@ final class Engine: ObservableObject {
             hint = "Canlı Çeviri\nBaşlat'a dokun"
         } else if o.isEmpty && t.isEmpty {
             if !broadcastConnected {
-                hint = "Ekran yayını bekleniyor…\n“Yayını Başlat”a dokun"
+                hint = Self.screenIsCaptured ? "Ekran yayını açık\nUygulamaya bağlanıyor…"
+                    : "Ekran yayını bekleniyor…\n“Yayını Başlat”a dokun"
             } else {
                 hint = screenMode ? "📺 Altyazı bekleniyor…" : "🎧 Dinleniyor…"
             }
@@ -1076,9 +1182,19 @@ final class Engine: ObservableObject {
             background: settings.boxBackground, fontStyle: settings.fontStyle, bold: settings.boldText)
     }
 
-    /// Ayarlar ekranındaki örnek kutu görüntüsü.
+    private var previewCache: (key: String, image: UIImage?)?
+
+    /// Ayarlar ekranındaki örnek kutu görüntüsü (yalnızca kutu stili değişince yeniden çizilir).
     func samplePreview() -> UIImage? {
-        renderer.image(boxContent(original: "Hey, welcome back! Today we're exploring the city.",
-                                  translation: "Hey, tekrar hoş geldin! Bugün şehri keşfediyoruz."))
+        let s = settings
+        let key = "\(s.displayMode)|\(s.lines)|\(s.fontSize)|\(s.centered)|\(s.textColor)|\(s.boxBackground)|\(s.fontStyle)|\(s.boldText)"
+        if let c = previewCache, c.key == key { return c.image }
+        let img = renderer.image(OverlayRenderer.Content(
+            original: "Hey, welcome back! Today we're exploring the city.",
+            translation: "Hey, tekrar hoş geldin! Bugün şehri keşfediyoruz.", hint: nil, paused: false,
+            mode: s.displayMode, lines: s.lines, fontSize: CGFloat(s.fontSize), centered: s.centered, color: s.textColor,
+            background: s.boxBackground, fontStyle: s.fontStyle, bold: s.boldText))
+        previewCache = (key, img)
+        return img
     }
 }
