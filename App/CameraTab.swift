@@ -163,7 +163,9 @@ struct CameraTab: View {
                         showTarget: s.displayMode != .original)
 
             if s.displayMode != .original {
+                QuickPairStrip(input: s.camInput)
                 TranslatorPicker()
+                if s.translator.isLLM { AIOptionsView() }
             }
 
             HStack(spacing: 10) {
@@ -213,7 +215,7 @@ struct CameraTab: View {
             StatusRow(connected: cameraRunning, running: cameraRunning, text: engine.status)
 
             if s.camInput == .screen {
-                Text("Sarı çerçeveyi içinden sürükle, 4 köşesinden boyutlandır; yalnızca altyazının çıktığı yeri kapsasın. Yansımayı azaltmak için cihazı TV'ye dik tut; yakınlaştırma ile altyazıyı büyüt.")
+                Text("Sarı çerçeveyi içinden sürükle, 4 köşesinden boyutlandır; yalnızca altyazının çıktığı yeri kapsasın. Yansımayı azaltmak için cihazı TV'ye dik tut; yakınlaştırma ile altyazıyı büyüt.\(camera.hasCameraControl ? " Kamera Denetimi düğmesinde parmağını kaydırarak da yakınlaştırabilirsin." : "")")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }

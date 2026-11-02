@@ -67,6 +67,10 @@ final class ScreenTextReader {
     }
 
     static func clamp(_ r: CGRect) -> CGRect {
+        // Bozuk değerler (NaN/sonsuz) Vision'a gitmesin: tüm ekran.
+        guard r.minX.isFinite, r.minY.isFinite, r.width.isFinite, r.height.isFinite, !r.isNull else {
+            return CGRect(x: 0, y: 0, width: 1, height: 1)
+        }
         let x = min(max(r.minX, 0), 0.95)
         let y = min(max(r.minY, 0), 0.95)
         let w = min(max(r.width, 0.05), 1 - x)

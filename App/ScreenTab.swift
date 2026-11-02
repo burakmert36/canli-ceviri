@@ -42,10 +42,13 @@ struct ScreenTab: View {
         Section {
             TranslatorPicker()
                 .listRowInsets(EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12))
+            if s.translator.isLLM {
+                AIOptionsView()
+            }
         } header: {
             Text("Çeviri motoru")
         } footer: {
-            Text("Ücretsiz: Google, iPhone Çeviri, Apple Zekâ. Gemini / ChatGPT / Claude daha doğal çevirir; kendi anahtarınla çalışır. Seçili motorun modelini “Ayarla”dan değiştirebilirsin.")
+            Text("Ücretsiz: Google, iPhone Çeviri, Apple Zekâ. Gemini / ChatGPT / Claude daha doğal çevirir; kendi anahtarınla çalışır. Seçili motorun modelini “Ayarla”dan değiştirebilirsin. İnternet giderse uygulama kendiliğinden iPhone Çeviri'ye geçer (dil paketi indirilmişse); aynı cümle tekrar gelirse yeniden çevirmez.")
         }
     }
 
@@ -138,6 +141,7 @@ struct ScreenTab: View {
                 Picker("Çeviri dili", selection: $s.targetLang) {
                     ForEach(Languages.targets) { Text($0.name).tag($0.id) }
                 }
+                QuickPairStrip(input: s.inputSource)
                 if let sw = Languages.swapped(source: s.sourceLang, target: s.targetLang) {
                     Button {
                         s.sourceLang = sw.source
@@ -199,10 +203,13 @@ struct ScreenTab: View {
             Toggle(isOn: $s.boxLocked) {
                 Label("Kutu boyutunu kilitle", systemImage: s.boxLocked ? "lock.fill" : "lock.open")
             }
+            Picker("Kutudaki ⏪ ⏩", selection: $s.pipButtons) {
+                ForEach(PiPButtonAction.allCases) { Text($0.title).tag($0) }
+            }
         } header: {
             Text("Kutu")
         } footer: {
-            Text("Kutunun boyunu “Satır sayısı” belirler (yazı boyutu, renk ve tema: Ayarlar). Genel büyüklüğü iki parmakla ayarla, ekranın altına ya da üstüne sürükle: iOS orada tutar ve sonraki açılışta aynı yerde açar. Kilit, boyutun yanlışlıkla değişmesini engeller.")
+            Text("Kutunun boyunu “Satır sayısı” belirler (yazı boyutu, renk ve tema: Ayarlar). Genel büyüklüğü iki parmakla ayarla, ekranın altına ya da üstüne sürükle: iOS orada tutar ve sonraki açılışta aynı yerde açar. Kilit, boyutun yanlışlıkla değişmesini engeller. “Kutudaki ⏪ ⏩ → Dil değiştir” seçilirse kutuya dokunup ⏩ ile son kullandığın dil çiftleri arasında geçersin.")
         }
     }
 

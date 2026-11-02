@@ -228,7 +228,7 @@ struct OnboardingView: View {
         ("captions.bubble.fill", "Her videoya anlık çeviri",
          "YouTube, TikTok, Instagram… Telefonda ne oynarsa, her uygulamanın üstünde duran kutuda anında Türkçesi çıkar."),
         ("pip.fill", "Ekran modu",
-         "Başlat'a dokun, açılan pencerede “Yayını Başlat” de ve videoya geç. Altyazılı videolarda “Altyazıyı oku” en doğru sonucu verir; uygulama altyazının yerini kendisi bulur."),
+         "Başlat'a dokun, açılan pencerede “Yayını Başlat” de ve videoya geç. Altyazılı videolarda “Altyazıyı oku” en doğru sonucu verir; altyazının çıktığı alanı bir kez seçmen yeterli (dikey ve yatay video için ayrı)."),
         ("camera.viewfinder", "Kamera / TV modu",
          "Telefonu ya da iPad'i TV'ye tut: ekrandaki altyazıyı okur veya konuşmayı dinler. İstersen çeviriyi sesli de okur. Tamamen ücretsiz ve cihaz içinde."),
         ("button.programmable", "Tek dokunuşla başlat",

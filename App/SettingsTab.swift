@@ -110,8 +110,9 @@ struct SettingsTab: View {
             Toggle(isOn: $s.boxLocked) {
                 Label("Kutu boyutunu kilitle", systemImage: s.boxLocked ? "lock.fill" : "lock.open")
             }
-            Toggle("Kutudaki ⏪ ⏩ ile satır sayısını değiştir", isOn: $s.pipButtonsResize)
-                .disabled(s.boxLocked)
+            Picker("Kutudaki ⏪ ⏩", selection: $s.pipButtons) {
+                ForEach(PiPButtonAction.allCases) { Text($0.title).tag($0) }
+            }
         } header: {
             Text("Altyazı kutusu")
         } footer: {
@@ -207,6 +208,9 @@ struct SettingsTab: View {
                 Text("Çeviri motoru").font(.subheadline)
                 TranslatorPicker()
             }
+            if s.translator.isLLM {
+                AIOptionsView()
+            }
         } header: {
             Text("Diller ve motorlar")
         } footer: {
@@ -239,8 +243,8 @@ struct SettingsTab: View {
 
     private var shortcutsSection: some View {
         Section {
-            Label("“Ekranı Çevir”, “Kamera Çevirisi” ve “Çeviriyi Durdur” kısayolları hazır.", systemImage: "bolt.fill")
-            Label("iPhone Eylem Düğmesi: Ayarlar → Eylem Düğmesi → Kestirme → Canlı Çeviri → Ekranı Çevir", systemImage: "button.programmable")
+            Label("Hazır kısayollar: Ekranı Çevir, Kamera Çevirisi, Dili Değiştir, Duraklat / Sürdür, Çeviriyi Durdur.", systemImage: "bolt.fill")
+            Label("iPhone Eylem Düğmesi: Ayarlar → Eylem Düğmesi → Kestirme → Canlı Çeviri → “Ekranı Çevir” ya da çeviri açıkken dil değiştirmek için “Dili Değiştir”", systemImage: "button.programmable")
             Label("Siri: “Canlı Çeviri ile ekranı çevir”", systemImage: "mic.fill")
             VStack(alignment: .leading, spacing: 6) {
                 Label("Arkaya iki kez dokun → ekrandaki yazıyı çevir", systemImage: "hand.tap.fill")

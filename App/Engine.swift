@@ -8,6 +8,8 @@ struct Segment {
     var original: String = ""
     var translation: String = ""
     var translatedSource: String = ""
+    /// Çeviri hibrit modun hızlı motorundan mı geldi? (cümle bitince seçilen yapay zekâ ile yenilenir)
+    var draft = false
 }
 
 /// Ses/ekran/kamera → yazı → çeviri → kutu (+ seslendirme, geçmiş) akışını yöneten ana sınıf.
@@ -99,6 +101,15 @@ final class Engine: ObservableObject {
     private var lastRenderKey = ""
     private var styleVersion = 0
 
+    // Kutuda kısa süreli bilgi (ör. dil değişti)
+    private var flashText: String?
+    private var flashUntil = Date.distantPast
+
+    #if DEBUG
+    /// Testlerde "başka uygulamadayken" ekran okumayı taklit etmek için.
+    var simulateBackground = false
+    #endif
+
     private init() {
         cfg = EngineConfig(AppSettings.shared)
         service = TranslationService(config: cfg)
@@ -111,11 +122,18 @@ final class Engine: ObservableObject {
         pip.onStatus = { [weak self] s in self?.status = s }
         pip.onActiveChanged = { [weak self] active in self?.boxVisible = active }
         pip.onSkip = { [weak self] forward in
-            guard let self = self, self.settings.pipButtonsResize else { return }
-            self.settings.changeLines(by: forward ? 1 : -1)
-            self.renderNow()
+            guard let self = self else { return }
+            switch self.settings.pipButtons {
+            case .lines:
+                self.settings.changeLines(by: forward ? 1 : -1)
+                self.renderNow()
+            case .language:
+                self.switchLanguagePair(forward: forward)
+            case .off:
+                break
+            }
         }
-        pip.showsSkipButtons = settings.pipButtonsResize && !settings.boxLocked
+        pip.showsSkipButtons = settings.pipButtonsVisible
 
         receiver.onAudio = { [weak self] samples in
             DispatchQueue.main.async {
@@ -130,6 +148,12 @@ final class Engine: ObservableObject {
             DispatchQueue.main.async { self?.connectionChanged(connected) }
         }
         receiver.ensureListening()
+
+        NetworkMonitor.shared.onChange = { [weak self] online in self?.networkChanged(online) }
+        camera.onSystemZoom = { [weak self] z in
+            guard let self = self, abs(self.settings.camZoom - z) > 0.01 else { return }
+            self.settings.camZoom = z
+        }
 
         camera.onFrame = { [weak self] frame in
             DispatchQueue.main.async { self?.handleCameraFrame(frame) }
@@ -219,6 +243,7 @@ final class Engine: ObservableObject {
         }
         runMode = .screen
         receiver.ensureListening()
+        settings.rememberCurrentPair()
         cfg = c
         service = TranslationService(config: c)
         resetCaptions()
@@ -228,7 +253,7 @@ final class Engine: ObservableObject {
         paused = false
         pip.paused = false
         pip.autoStartWhenBackgrounded = true
-        pip.showsSkipButtons = settings.pipButtonsResize && !settings.boxLocked
+        pip.showsSkipButtons = settings.pipButtonsVisible
         audioConnected = broadcastConnected
         status = broadcastConnected ? connectedStatus : "Ekran yayını bekleniyor…"
         startTimer()
@@ -270,6 +295,7 @@ final class Engine: ObservableObject {
             return
         }
         runMode = .camera
+        settings.rememberCurrentPair()
         cfg = c
         service = TranslationService(config: c)
         resetCaptions()
@@ -284,6 +310,13 @@ final class Engine: ObservableObject {
             }
         } else {
             camera.start()
+            guard !camera.unavailable else {
+                status = "Bu cihazda arka kamera kullanılamıyor."
+                stopRecognition()
+                try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+                runMode = .screen
+                return
+            }
             camera.setZoom(CGFloat(settings.camZoom))
             camera.setFrameRate(saving ? 10 : 15)
         }
@@ -314,6 +347,7 @@ final class Engine: ObservableObject {
             runMode = .screen
         } else {
             setVideoMode(.off)
+            receiver.setAudioEnabled(true)
             receiver.requestBroadcastStop()
             pip.autoStartWhenBackgrounded = false
             pip.stop()
@@ -345,6 +379,38 @@ final class Engine: ObservableObject {
     }
 
     func togglePause() { setPaused(!paused) }
+
+    /// Hızlı dil değiştirme (kutudaki ⏪ ⏩, Eylem Düğmesi kısayolu ya da uygulamadaki çipler).
+    @discardableResult
+    func switchLanguagePair(forward: Bool = true) -> LangPair? {
+        let input = runMode == .camera ? settings.camInput : settings.inputSource
+        guard let p = settings.cycleLanguagePair(forward: forward, input: input) else {
+            flash("Hızlı geçiş için başka bir dil çifti yok")
+            return nil
+        }
+        flash("🌐 " + p.title)
+        return p
+    }
+
+    /// Kutuda 1,8 sn kısa bir bilgi gösterir.
+    func flash(_ text: String) {
+        flashText = text
+        flashUntil = Date().addingTimeInterval(1.8)
+        status = text.replacingOccurrences(of: "🌐 ", with: "Dil: ")
+        renderNow(force: true)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.9) { [weak self] in self?.renderNow(force: true) }
+    }
+
+    private func networkChanged(_ online: Bool) {
+        guard running, cfg.translationEnabled else { return }
+        if !online {
+            status = "İnternet yok — cihaz içi çeviriye geçildi"
+        } else if status.hasPrefix("İnternet yok") || status.hasPrefix("Çeviri hatası") {
+            status = "İnternet geri geldi"
+            backoffUntil = .distantPast
+            translateFailures = 0
+        }
+    }
 
     /// Kutudaki ve geçmişteki son metinleri temizler.
     func clearCaptions() {
@@ -399,11 +465,18 @@ final class Engine: ObservableObject {
             reader.resetDetection()
             configureReader()
             lastCaptionAt = Date()
-            if runMode == .screen { setVideoMode(.fast) }
+            if runMode == .screen {
+                setVideoMode(.fast)
+                // Altyazı okunurken uzantının sesi işleyip göndermesine gerek yok (pil).
+                receiver.setAudioEnabled(false)
+            }
             return true
         }
         screenMode = false
-        if runMode == .screen { setVideoMode(.off) }
+        if runMode == .screen {
+            setVideoMode(.off)
+            receiver.setAudioEnabled(true)
+        }
         if cfg.asr == .apple {
             guard let r = AppleRecognizer(localeID: cfg.sourceLang) else {
                 status = "Bu dil için Apple ses tanıma yok. Bulut tanımayı dene."
@@ -453,7 +526,7 @@ final class Engine: ObservableObject {
 
     private func settingsChanged() {
         styleVersion += 1
-        pip.showsSkipButtons = settings.pipButtonsResize && !settings.boxLocked
+        pip.showsSkipButtons = settings.pipButtonsVisible
         configureReader()
         renderNow()
         guard running else { return }
@@ -470,7 +543,12 @@ final class Engine: ObservableObject {
             || new.geminiKey != cfg.geminiKey || new.openaiKey != cfg.openaiKey || new.claudeKey != cfg.claudeKey
             || new.geminiModel != cfg.geminiModel || new.openaiModel != cfg.openaiModel
             || new.openaiASRModel != cfg.openaiASRModel || new.claudeModel != cfg.claudeModel
-        guard changed else { return }
+            || new.contentKind != cfg.contentKind
+        if !changed {
+            // Hibrit ayarı yalnızca bundan sonraki çevirileri etkiler.
+            cfg.hybrid = new.hybrid
+            return
+        }
         if let problem = validate(new) { status = problem; return }
         if new.usesAppleASR && !cfg.usesAppleASR && !AppleRecognizer.isAuthorized {
             status = "Ses moduna geçmek için durdurup yeniden başlat (izin gerekiyor)."
@@ -483,12 +561,13 @@ final class Engine: ObservableObject {
             _ = startRecognition()
         } else {
             // Yeni dil/motor/gösterimle mevcut satırları yeniden çevir.
-            for i in committed.indices { committed[i].translatedSource = "" }
+            for i in committed.indices { committed[i].translatedSource = ""; committed[i].draft = false }
             live.translatedSource = ""
+            live.draft = false
             for s in committed.suffix(2) { translate(s.id) }
             translate(live.id)
         }
-        status = "Ayarlar uygulandı"
+        if !(flashUntil > Date()) { status = "Ayarlar uygulandı" }
     }
 
     /// Kendi seslendirmemizi tekrar dinlememek için gelen sesi geçici olarak yok sayar.
@@ -529,7 +608,7 @@ final class Engine: ObservableObject {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             // Kendi uygulamamız açıkken ekranda kendi ayarlarımız var; onları okumayalım.
-            guard self.appInBackground else { return }
+            guard self.readingAllowed else { return }
             if frame.isLandscape { self.lastLandscapeFrame = frame } else { self.lastPortraitFrame = frame }
             guard self.running, self.runMode == .screen, self.screenMode, !self.paused else { return }
             self.submitForReading(frame)
@@ -539,6 +618,14 @@ final class Engine: ObservableObject {
     private func handleCameraFrame(_ frame: ScreenFrame) {
         guard running, runMode == .camera, screenMode, !paused else { return }
         submitForReading(frame)
+    }
+
+    /// Ekran okumaya izin var mı? (yalnızca başka uygulamadayken)
+    private var readingAllowed: Bool {
+        #if DEBUG
+        if simulateBackground { return true }
+        #endif
+        return appInBackground
     }
 
     /// Altyazı yokken ya da tasarruf/ısınma durumunda daha seyrek okur.
@@ -588,7 +675,7 @@ final class Engine: ObservableObject {
             // (oyun arayüzündeki sayılar, para, süre gibi yazılar hariç).
             fresh = lines.map { $0.text }.filter { !CaptionTracker.looksLikeInterface($0) }
         } else {
-            guard appInBackground else { return }
+            guard readingAllowed else { return }
             let (o, t) = displayTexts()
             let exclude = CaptionTracker.normalize(o + " " + t)
             fresh = captions.dynamicLines(lines, exclude: exclude)
@@ -693,7 +780,7 @@ final class Engine: ObservableObject {
             committed.append(old)
             if committed.count > 40 { committed.removeFirst(committed.count - 40) }
             debounce?.cancel()
-            if !cfg.translationEnabled || (old.translatedSource == text && !old.translation.isEmpty) {
+            if !cfg.translationEnabled || (old.translatedSource == text && !old.translation.isEmpty && !old.draft) {
                 finalize(old.id)
             } else {
                 translate(old.id)
@@ -768,6 +855,7 @@ final class Engine: ObservableObject {
         debounce = w
         let delay: Double
         switch cfg.translator {
+        case _ where cfg.hybridActive: delay = screenMode ? 0.25 : 0.45   // hızlı motor
         case .google: delay = screenMode ? 0.25 : 0.45
         case .apple: delay = 0.3
         default: delay = screenMode ? 0.6 : 0.9
@@ -787,28 +875,44 @@ final class Engine: ObservableObject {
         return segmentIndex(id).map { committed[$0].translatedSource }
     }
 
-    private func setTranslation(_ id: Int, source: String, translation: String) {
+    private func setTranslation(_ id: Int, source: String, translation: String, draft: Bool) {
         if id == live.id {
             live.translation = translation
             live.translatedSource = source
+            live.draft = draft
         } else if let i = segmentIndex(id) {
+            // Kesin çeviri geldiyse geç kalan taslak onu ezmesin.
+            if draft && !committed[i].draft && committed[i].translatedSource == source { return }
             committed[i].translation = translation
             committed[i].translatedSource = source
+            committed[i].draft = draft
         }
+    }
+
+    private func isDraft(_ id: Int) -> Bool {
+        if id == live.id { return live.draft }
+        return segmentIndex(id).map { committed[$0].draft } ?? false
     }
 
     private func translate(_ id: Int) {
         guard running, cfg.translationEnabled, id > 0,
-              let raw = text(of: id)?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty,
-              translatedSource(of: id) != raw else { return }
+              let raw = text(of: id)?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return }
+        // Hibrit: cümle sürerken hızlı ücretsiz motor, bitince seçilen yapay zekâ.
+        let useFast = cfg.hybridActive && id == live.id
+        if translatedSource(of: id) == raw && (useFast || !isDraft(id)) { return }
         if Date() < backoffUntil { pendingRetry.insert(id); return }
         if inFlight.contains(id) { dirty.insert(id); return }
         inFlight.insert(id)
-        let context = committed.filter { $0.id != id && $0.id < id }.suffix(2).map { $0.original }
+        let context = committed.filter { $0.id != id && $0.id < id }.suffix(3).map { $0.original }
         let svc = service
         Task { [weak self] in
             let outcome: Result<String, Error>
-            do { outcome = .success(try await svc.translate(raw, context: Array(context))) } catch { outcome = .failure(error) }
+            do {
+                let r = useFast ? try await svc.translateFast(raw) : try await svc.translate(raw, context: Array(context))
+                outcome = .success(r)
+            } catch {
+                outcome = .failure(error)
+            }
             await MainActor.run {
                 guard let self = self else { return }
                 self.inFlight.remove(id)
@@ -826,10 +930,10 @@ final class Engine: ObservableObject {
                     }
                 case .success(let result):
                     self.translateFailures = 0
-                    self.setTranslation(id, source: raw, translation: result)
+                    self.setTranslation(id, source: raw, translation: result, draft: useFast)
                     if self.status.hasPrefix("Çeviri hatası") { self.status = self.connectedStatus }
-                    // Kesinleşmiş cümlenin son hâli çevrildiyse geçmişe yaz ve seslendir.
-                    if id != self.live.id,
+                    // Kesinleşmiş cümlenin son hâli (kesin çeviriyle) çevrildiyse geçmişe yaz ve seslendir.
+                    if !useFast, id != self.live.id,
                        self.text(of: id)?.trimmingCharacters(in: .whitespacesAndNewlines) == raw {
                         self.finalize(id)
                     }
@@ -849,7 +953,7 @@ final class Engine: ObservableObject {
         nextSeq += 1
         cloudPending[seq] = Date()
         cloudInFlight += 1
-        let context = committed.suffix(2).map { $0.original }
+        let context = committed.suffix(3).map { $0.original }
         let svc = service
         Task { [weak self] in
             let outcome: Result<(String, String), Error>
@@ -929,7 +1033,10 @@ final class Engine: ObservableObject {
         // Kamera modunda kutu uygulamanın içinde gösterilir; PiP kutusu yalnızca ekran modunda.
         if running && runMode == .camera { return }
         var hint: String?
-        if !running {
+        if let f = flashText, Date() < flashUntil {
+            o = ""; t = ""
+            hint = f
+        } else if !running {
             o = ""; t = ""
             hint = "Canlı Çeviri\nBaşlat'a dokun"
         } else if o.isEmpty && t.isEmpty {

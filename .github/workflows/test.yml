@@ -1,0 +1,146 @@
+name: Testler (iPhone 17 simülatörü)
+
+on:
+  push:
+    branches: [dev, main]
+    paths-ignore: ["**.md", "docs/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: macos-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: En yeni Xcode'u seç
+        run: |
+          XC=$(ls -d /Applications/Xcode_*.app | grep -v -i beta | sort -V | tail -1)
+          [ -z "$XC" ] && XC=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          sudo xcode-select -s "$XC"
+          mkdir -p logs
+          {
+            echo "== Xcode =="; xcodebuild -version
+            echo "== macOS =="; sw_vers
+            echo "== Çalışma zamanları =="; xcrun simctl list runtimes available
+          } | tee logs/env.txt
+
+      - name: XcodeGen
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: iPhone 17 simülatörünü hazırla
+        run: |
+          python3 - <<'EOF' > sim.txt
+          import json, subprocess
+          def j(*a): return json.loads(subprocess.check_output(["xcrun", "simctl", "list", "-j", *a]))
+          runtimes = [r for r in j("runtimes", "available")["runtimes"] if r.get("platform") == "iOS" or r["identifier"].endswith(".iOS") or "iOS" in r["name"]]
+          runtimes.sort(key=lambda r: [int(x) for x in r["version"].split(".")])
+          rt = runtimes[-1]
+          devs = j("devices", "available")["devices"].get(rt["identifier"], [])
+          pick = next((d for d in devs if d["name"] == "iPhone 17"), None)
+          if pick is None:
+              types = j("devicetypes")["devicetypes"]
+              t = next((t for t in types if t["name"] == "iPhone 17"), None)
+              if t is not None:
+                  udid = subprocess.check_output(["xcrun", "simctl", "create", "iPhone 17", t["identifier"], rt["identifier"]]).decode().strip()
+                  pick = {"udid": udid, "name": "iPhone 17"}
+          if pick is None:
+              iphones = [d for d in devs if d["name"].startswith("iPhone")]
+              pick = iphones[-1]
+          print(pick["udid"], pick["name"].replace(" ", "_"), rt["name"].replace(" ", "_"))
+          EOF
+          cat sim.txt
+          read UDID NAME RUNTIME < sim.txt
+          echo "UDID=$UDID" >> "$GITHUB_ENV"
+          echo "SIMNAME=$NAME ($RUNTIME)" >> "$GITHUB_ENV"
+          echo "Simülatör: $NAME $RUNTIME $UDID" | tee -a logs/env.txt
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          for s in camera microphone speech-recognition all; do
+            xcrun simctl privacy "$UDID" grant "$s" com.canliceviri.app 2>/dev/null || true
+          done
+
+      - name: Testler için derle
+        run: |
+          set -o pipefail
+          xcodebuild build-for-testing \
+            -project CanliCeviri.xcodeproj -scheme CanliCeviri -configuration Debug \
+            -destination "id=$UDID" -derivedDataPath dd \
+            CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=NO DEVELOPMENT_TEAM="" \
+            2>&1 | tee logs/build.log | grep -E "error:|warning: .*(Sendable|deprecated)|\*\* BUILD" | head -200
+
+      - name: Birim, stres ve uçtan uca testler
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          xcodebuild test-without-building \
+            -project CanliCeviri.xcodeproj -scheme CanliCeviri -destination "id=$UDID" -derivedDataPath dd \
+            -only-testing:CanliCeviriTests -resultBundlePath results/unit.xcresult \
+            2>&1 | tee logs/unit.log | grep -E "Test Case .*(failed|passed)|error:|measured|\*\* TEST|Executed" | head -400
+
+      - name: Arayüz, döndürme ve maymun testleri
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          xcodebuild test-without-building \
+            -project CanliCeviri.xcodeproj -scheme CanliCeviri -destination "id=$UDID" -derivedDataPath dd \
+            -only-testing:CanliCeviriUITests -resultBundlePath results/ui.xcresult \
+            2>&1 | tee logs/ui.log | grep -E "Test Case .*(failed|passed)|error:|measured|\*\* TEST|Executed|crash" | head -400
+
+      - name: Thread Sanitizer (eşzamanlılık hataları)
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project CanliCeviri.xcodeproj -scheme CanliCeviri -configuration Debug \
+            -destination "id=$UDID" -derivedDataPath dd-tsan -enableThreadSanitizer YES \
+            -only-testing:CanliCeviriTests -skip-testing:CanliCeviriTests/OCRTests/testRandomFramesStress \
+            -resultBundlePath results/tsan.xcresult \
+            CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=NO DEVELOPMENT_TEAM="" \
+            2>&1 | tee logs/tsan.log | grep -E "ThreadSanitizer|Test Case .*failed|error:|\*\* TEST|Executed" | head -300
+
+      - name: Address Sanitizer (bellek hataları)
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project CanliCeviri.xcodeproj -scheme CanliCeviri -configuration Debug \
+            -destination "id=$UDID" -derivedDataPath dd-asan -enableAddressSanitizer YES \
+            -only-testing:CanliCeviriTests -resultBundlePath results/asan.xcresult \
+            CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=NO DEVELOPMENT_TEAM="" \
+            2>&1 | tee logs/asan.log | grep -E "AddressSanitizer|Test Case .*failed|error:|\*\* TEST|Executed" | head -300
+
+      - name: Sonuç özeti
+        if: always()
+        run: |
+          python3 scripts/test_summary.py > logs/test-summary.txt || true
+          cat logs/test-summary.txt
+          git config user.name "build-bot"
+          git config user.email "build-bot@users.noreply.github.com"
+          mkdir -p /tmp/out && cp logs/*.txt /tmp/out/ 2>/dev/null || true
+          for f in unit ui tsan asan build; do
+            [ -f logs/$f.log ] && grep -E "error:|failed|Fatal|ThreadSanitizer|AddressSanitizer|crash|Crash|SUMMARY:|measured|Executed|\*\* (TEST|BUILD)" logs/$f.log | head -600 > /tmp/out/$f-key.txt || true
+            [ -f logs/$f.log ] && tail -150 logs/$f.log > /tmp/out/$f-tail.txt || true
+          done
+          git fetch origin test-logs || true
+          git checkout -B test-logs
+          git rm -rq --cached . || true
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp /tmp/out/* .
+          git add -A
+          git commit -qm "tests ${{ github.run_number }} (${{ github.sha }}) ${{ github.ref_name }}" || true
+          git push -f origin test-logs || true
+
+      - name: Başarısız test varsa işi kırmızı yap
+        if: always()
+        run: |
+          grep -q "SONUÇ: BAŞARILI" /tmp/out/test-summary.txt

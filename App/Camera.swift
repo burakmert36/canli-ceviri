@@ -7,7 +7,8 @@ import ImageIO
 // MARK: - Kamera
 
 /// Arka kamerayı açar, saniyede ~2,5 kare gri tonlamalı görüntü üretir (altyazı okumak için).
-final class CameraCapture: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleBufferDelegate {
+final class CameraCapture: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleBufferDelegate,
+                           AVCaptureSessionControlsDelegate {
     let session = AVCaptureSession()
     /// Görüntü dik mi (telefon/tablet dik tutuluyor)?
     @Published private(set) var isPortraitImage = true
@@ -16,6 +17,10 @@ final class CameraCapture: NSObject, ObservableObject, AVCaptureVideoDataOutputS
 
     /// Kamera kuyruğunda çağrılır.
     var onFrame: ((ScreenFrame) -> Void)?
+    /// iPhone'un Kamera Denetimi düğmesiyle yakınlaştırma değişti (ana iş parçacığında).
+    var onSystemZoom: ((Double) -> Void)?
+    /// Kamera Denetimi (iPhone 16/17) bu cihazda kullanılabiliyor mu?
+    @Published private(set) var hasCameraControl = false
 
     private let queue = DispatchQueue(label: "canliceviri.camera", qos: .userInitiated)
     private let output = AVCaptureVideoDataOutput()
@@ -47,6 +52,7 @@ final class CameraCapture: NSObject, ObservableObject, AVCaptureVideoDataOutputS
         output.alwaysDiscardsLateVideoFrames = true
         output.setSampleBufferDelegate(self, queue: queue)
         if session.canAddOutput(output) { session.addOutput(output) }
+        addCameraControl(dev)
         session.commitConfiguration()
 
         if (try? dev.lockForConfiguration()) != nil {
@@ -57,6 +63,30 @@ final class CameraCapture: NSObject, ObservableObject, AVCaptureVideoDataOutputS
         maxZoom = max(1, min(8, dev.activeFormat.videoMaxZoomFactor))
         setFrameRate(15)
     }
+
+    /// iPhone 16/17'deki Kamera Denetimi düğmesinde kaydırarak yakınlaştırma (TV altyazısını büyütmek için).
+    private func addCameraControl(_ dev: AVCaptureDevice) {
+        guard session.supportsControls else { return }
+        session.setControlsDelegate(self, queue: queue)
+        for c in session.controls { session.removeControl(c) }
+        let slider = AVCaptureSystemZoomSlider(device: dev) { [weak self] zoom in
+            let z = Double(zoom)
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                self.onSystemZoom?(min(max(1, z), Double(self.maxZoom)))
+            }
+        }
+        if session.canAddControl(slider) {
+            session.addControl(slider)
+            hasCameraControl = true
+        }
+    }
+
+    // AVCaptureSessionControlsDelegate (Kamera Denetimi görünümü; ek iş gerekmiyor)
+    func sessionControlsDidBecomeActive(_ session: AVCaptureSession) {}
+    func sessionControlsWillEnterFullscreenAppearance(_ session: AVCaptureSession) {}
+    func sessionControlsWillExitFullscreenAppearance(_ session: AVCaptureSession) {}
+    func sessionControlsDidBecomeInactive(_ session: AVCaptureSession) {}
 
     func start() {
         configureIfNeeded()

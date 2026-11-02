@@ -72,6 +72,34 @@ struct StopTranslationIntent: AppIntent {
     }
 }
 
+/// Dil çiftini değiştirir (ör. İngilizce→Türkçe ⇄ Almanca→Türkçe). iPhone 17'nin Eylem Düğmesi'ne atanabilir.
+struct SwitchLanguageIntent: AppIntent {
+    static let title: LocalizedStringResource = "Çeviri Dilini Değiştir"
+    static let openAppWhenRun: Bool = false
+
+    @MainActor
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        guard let p = Engine.shared.switchLanguagePair(forward: true) else {
+            return .result(dialog: "Geçilecek başka dil çifti yok. Uygulamada birkaç farklı dil çifti kullan.")
+        }
+        return .result(dialog: "\(p.title)")
+    }
+}
+
+/// Çeviriyi duraklatır ya da sürdürür.
+struct TogglePauseIntent: AppIntent {
+    static let title: LocalizedStringResource = "Çeviriyi Duraklat / Sürdür"
+    static let openAppWhenRun: Bool = false
+
+    @MainActor
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        guard Engine.shared.running else { return .result(dialog: "Çeviri şu an çalışmıyor.") }
+        Engine.shared.togglePause()
+        if Engine.shared.paused { return .result(dialog: "Duraklatıldı") }
+        return .result(dialog: "Devam ediyor")
+    }
+}
+
 /// Bir görüntüdeki (ör. ekran görüntüsü) tüm yazıyı okur ve çevirir.
 /// Kestirmeler'de "Ekran Görüntüsü Al" ile birlikte kullanılır; iPhone'un arkasına iki kez dokunarak çalıştırılabilir.
 struct TranslateImageIntent: AppIntent {
@@ -131,6 +159,14 @@ struct CanliCeviriShortcuts: AppShortcutsProvider {
                     phrases: ["\(.applicationName) durdur", "Stop \(.applicationName)"],
                     shortTitle: "Çeviriyi Durdur",
                     systemImageName: "stop.circle")
+        AppShortcut(intent: SwitchLanguageIntent(),
+                    phrases: ["\(.applicationName) dilini değiştir", "Switch \(.applicationName) language"],
+                    shortTitle: "Dili Değiştir",
+                    systemImageName: "globe")
+        AppShortcut(intent: TogglePauseIntent(),
+                    phrases: ["\(.applicationName) duraklat", "Pause \(.applicationName)"],
+                    shortTitle: "Duraklat / Sürdür",
+                    systemImageName: "playpause.fill")
     }
 }
 

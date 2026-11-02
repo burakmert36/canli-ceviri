@@ -119,6 +119,18 @@ enum Languages {
         return (s, newTarget)
     }
 
+    /// Hızlı dil çifti etiketleri için kısa ad ("İngilizce (ABD)" → "İngilizce").
+    static func shortName(source english: String, id: String) -> String {
+        if id == "auto" { return "Otomatik" }
+        let n = Languages.source(id)?.name ?? english
+        return n.components(separatedBy: " (").first ?? n
+    }
+
+    static func shortName(target english: String, id: String) -> String {
+        let n = Languages.target(id)?.name ?? english
+        return n.components(separatedBy: " (").first ?? n
+    }
+
     /// Apple Translation çerçevesi için dil kimliği.
     static func appleLanguageID(_ id: String) -> String {
         switch id {

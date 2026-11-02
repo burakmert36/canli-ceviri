@@ -21,9 +21,16 @@ struct ScreenFrame {
 
 /// Yayın uzantısından gelen ses ve görüntüyü yalnızca 127.0.0.1 üzerinden dinler.
 /// Mesaj biçimi: [tür 1 bayt][uzunluk 4 bayt LE][veri] — 'A' ses, 'F' ekran karesi.
+/// Uzantıya giden tek baytlık komutlar: 'S' yayını kapat, 'V'/'W'/'v' görüntü sık/seyrek/kapalı, 'M'/'m' ses açık/kapalı.
 final class AudioReceiver {
     static let port: UInt16 = 47321
-    private static let maxMessage = 16 * 1024 * 1024
+    static let maxMessage = 16 * 1024 * 1024
+
+    let port: UInt16
+
+    init(port: UInt16 = AudioReceiver.port) {
+        self.port = port
+    }
 
     /// Ses örnekleri (alıcı kuyruğunda çağrılır).
     var onAudio: (([Int16]) -> Void)?
@@ -37,6 +44,7 @@ final class AudioReceiver {
     private var connection: NWConnection?
     private var buffer = Data()
     private var videoMode: VideoMode = .off
+    private var audioEnabled = true
 
     /// Uzantıdan istenen ekran görüntüsü sıklığı.
     enum VideoMode {
@@ -63,6 +71,27 @@ final class AudioReceiver {
         }
     }
 
+    /// Uzantının sesi işleyip gönderip göndermeyeceği (altyazı okurken ses gerekmez: pil tasarrufu).
+    func setAudioEnabled(_ on: Bool) {
+        queue.async {
+            guard self.audioEnabled != on else { return }
+            self.audioEnabled = on
+            self.sendCommand(on ? "M" : "m")
+        }
+    }
+
+    /// Dinlemeyi tamamen kapatır (testler için).
+    func shutdown() {
+        queue.sync {
+            self.connection?.cancel()
+            self.connection = nil
+            let l = self.listener
+            self.listener = nil
+            l?.cancel()
+            self.buffer.removeAll()
+        }
+    }
+
     /// Uzantıya "yayını kapat" komutu gönderir.
     func requestBroadcastStop() {
         queue.async { self.sendCommand("S") }
@@ -74,7 +103,7 @@ final class AudioReceiver {
     }
 
     private func startListener() {
-        guard listener == nil, let port = NWEndpoint.Port(rawValue: Self.port) else { return }
+        guard listener == nil, let port = NWEndpoint.Port(rawValue: self.port) else { return }
         let params = NWParameters.tcp
         params.requiredInterfaceType = .loopback
         params.allowLocalEndpointReuse = true
@@ -107,7 +136,11 @@ final class AudioReceiver {
             guard let self = self else { return }
             switch state {
             case .ready:
-                if let c = conn, self.connection === c, self.videoMode != .off { self.sendCommand(self.videoMode.command) }
+                if let c = conn, self.connection === c {
+                    // Yeni bağlanan uzantıya güncel istekleri bildir.
+                    if self.videoMode != .off { self.sendCommand(self.videoMode.command) }
+                    if !self.audioEnabled { self.sendCommand("m") }
+                }
                 self.onConnectionChange?(true)
             case .failed, .cancelled:
                 if let c = conn, self.connection === c {

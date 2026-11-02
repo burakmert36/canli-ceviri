@@ -11,12 +11,28 @@ import ReplayKit
 /// Mesaj biçimi: [tür: 1 bayt]['uzunluk: 4 bayt LE][veri]
 ///   'A' → 16 kHz mono Int16 LE ses
 ///   'F' → [genişlik: UInt16 LE][yükseklik: UInt16 LE][yön: UInt8][gri pikseller]
-/// Uygulamadan gelen tek baytlık komutlar: 'S' yayını kapat, 'V' sık görüntü, 'W' seyrek görüntü, 'v' görüntüyü kes.
+/// Uygulamadan gelen tek baytlık komutlar: 'S' yayını kapat, 'V' sık görüntü, 'W' seyrek görüntü, 'v' görüntüyü kes,
+/// 'M' sesi gönder, 'm' sesi gönderme (altyazı okunurken ses gereksiz: pil).
 final class AudioSender {
     static let port: UInt16 = 47321
     static let maxFrameSide = 1300
+    /// Gönderilmeyi bekleyen veri bu sınırı aşarsa yeni ses/görüntü atlanır.
+    /// Uzantının bellek sınırı (~50 MB) aşılıp sistemce kapatılmasını önler.
+    static let maxPendingBytes = 2 * 1024 * 1024
 
     var onFinish: ((String) -> Void)?
+
+    let port: UInt16
+    init(port: UInt16 = AudioSender.port) {
+        self.port = port
+    }
+
+    /// Kuyrukta bekleyen gönderim miktarı (yalnızca `queue` üzerinde).
+    private var pendingBytes = 0
+    /// Atlanan mesaj sayısı (tanı için).
+    private(set) var droppedMessages = 0
+    private let audioLock = NSLock()
+    private var audioEnabled = true
 
     private let queue = DispatchQueue(label: "canliceviri.sender")
     private var connection: NWConnection?
@@ -57,12 +73,35 @@ final class AudioSender {
 
     /// ReplayKit'in kendi iş parçacığında çağrılır (seri).
     func process(_ sampleBuffer: CMSampleBuffer) {
+        audioLock.lock(); let on = audioEnabled; audioLock.unlock()
+        guard on else { return }
         guard let pcm = converter.convert(sampleBuffer), !pcm.isEmpty else { return }
         let message = Self.message(type: UInt8(ascii: "A"), payload: pcm)
         queue.async {
             guard self.ready, let conn = self.connection else { return }
-            conn.send(content: message, completion: .contentProcessed { _ in })
+            self.send(message, on: conn) {}
         }
+    }
+
+    /// Geri basınçlı gönderim: alıcı yetişemiyorsa bellek şişmesin diye mesaj atlanır.
+    /// `queue` üzerinde çağrılır; `done` her durumda (gönderildi ya da atlandı) bir kez çağrılır.
+    private func send(_ message: Data, on conn: NWConnection, done: @escaping () -> Void) {
+        if pendingBytes + message.count > Self.maxPendingBytes {
+            droppedMessages += 1
+            done()
+            return
+        }
+        pendingBytes += message.count
+        let size = message.count
+        conn.send(content: message, completion: .contentProcessed { [weak self] _ in
+            // NWConnection tamamlama bloklarını bağlantının kuyruğunda (queue) çağırır.
+            if let self = self { self.pendingBytes = max(0, self.pendingBytes - size) }
+            done()
+        })
+    }
+
+    private func setAudio(_ on: Bool) {
+        audioLock.lock(); audioEnabled = on; audioLock.unlock()
     }
 
     /// Ekran karesi: yalnızca uygulama istediyse, saniyede ~2,5 kez, önceki gönderim bittiyse.
@@ -83,10 +122,10 @@ final class AudioSender {
                 self.videoLock.lock(); self.framePending = false; self.videoLock.unlock()
                 return
             }
-            conn.send(content: message, completion: .contentProcessed { [weak self] _ in
+            self.send(message, on: conn) { [weak self] in
                 guard let self = self else { return }
                 self.videoLock.lock(); self.framePending = false; self.videoLock.unlock()
-            })
+            }
         }
     }
 
@@ -98,7 +137,7 @@ final class AudioSender {
         videoLock.unlock()
     }
 
-    private static func message(type: UInt8, payload: Data) -> Data {
+    static func message(type: UInt8, payload: Data) -> Data {
         var d = Data(capacity: payload.count + 5)
         d.append(type)
         var len = UInt32(payload.count).littleEndian
@@ -108,7 +147,7 @@ final class AudioSender {
     }
 
     /// Ekran karesinin parlaklık (Y) kanalını en uzun kenarı ~1280 olacak şekilde küçültür.
-    private static func grayFrame(_ sb: CMSampleBuffer) -> Data? {
+    static func grayFrame(_ sb: CMSampleBuffer) -> Data? {
         guard let pb = CMSampleBufferGetImageBuffer(sb) else { return nil }
         CVPixelBufferLockBaseAddress(pb, .readOnly)
         defer { CVPixelBufferUnlockBaseAddress(pb, .readOnly) }
@@ -178,9 +217,13 @@ final class AudioSender {
     // MARK: - Bağlantı
 
     private func connect() {
-        guard !stopped, let port = NWEndpoint.Port(rawValue: Self.port) else { return }
+        guard !stopped, let port = NWEndpoint.Port(rawValue: self.port) else { return }
         let conn = NWConnection(host: NWEndpoint.Host("127.0.0.1"), port: port, using: .tcp)
         connection = conn
+        pendingBytes = 0
+        // Yeni bağlantıda varsayılanlara dön; uygulama bağlanınca güncel isteklerini yeniden bildirir.
+        setAudio(true)
+        setVideo(false)
         conn.stateUpdateHandler = { [weak self] state in
             guard let self = self else { return }
             switch state {
@@ -219,6 +262,8 @@ final class AudioSender {
                     case UInt8(ascii: "V"): self.setVideo(true, interval: 0.4)
                     case UInt8(ascii: "W"): self.setVideo(true, interval: 1.0)
                     case UInt8(ascii: "v"): self.setVideo(false)
+                    case UInt8(ascii: "M"): self.setAudio(true)
+                    case UInt8(ascii: "m"): self.setAudio(false)
                     default: break
                     }
                 }
@@ -273,6 +318,11 @@ final class PCMConverter {
     private var mono: [Float] = []
 
     init(outRate: Double) { self.outRate = outRate }
+
+    /// Bozuk örnekler (NaN, sonsuz, aşırı büyük) filtreyi kalıcı olarak bozmasın.
+    @inline(__always) static func sanitize(_ v: Float) -> Float {
+        v.isFinite ? max(-4, min(4, v)) : 0
+    }
 
     func convert(_ sb: CMSampleBuffer) -> Data? {
         guard let fd = CMSampleBufferGetFormatDescription(sb),
@@ -332,7 +382,7 @@ final class PCMConverter {
                     acc += sample(d, i * bytes)
                     used += 1
                 }
-                mono.append(used > 0 ? acc / Float(used) : 0)
+                mono.append(Self.sanitize(used > 0 ? acc / Float(used) : 0))
             }
         } else {
             guard let d = abl[0].mData else { return nil }
@@ -341,7 +391,7 @@ final class PCMConverter {
             for i in 0..<n {
                 var acc: Float = 0
                 for c in 0..<channels { acc += sample(d, i * frameBytes + c * bytes) }
-                mono.append(acc / Float(channels))
+                mono.append(Self.sanitize(acc / Float(channels)))
             }
         }
         let n = mono.count
@@ -356,6 +406,7 @@ final class PCMConverter {
             prev = 0
         }
         for i in 0..<n { mono[i] = filter.process(mono[i]) }
+        if !prev.isFinite { prev = 0 }
 
         let step = inRate / outRate
         var out = Data(capacity: Int(Double(n) / step + 4) * 2)
@@ -400,6 +451,11 @@ struct Biquad {
         let y = b0 * x + z1
         z1 = b1 * x - a1 * y + z2
         z2 = b2 * x - a2 * y
+        if !y.isFinite || !z1.isFinite || !z2.isFinite {
+            // Filtre durumu bozulduysa sıfırla (aksi hâlde ses kalıcı olarak susar).
+            z1 = 0; z2 = 0
+            return 0
+        }
         return y
     }
 }

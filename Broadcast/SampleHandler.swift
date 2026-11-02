@@ -1,9 +1,9 @@
 import ReplayKit
 import CoreMedia
 
-/// Ekran yayını uzantısı: telefonda çalan sesi (TikTok, YouTube vb.) yakalar
-/// ve 16 kHz mono PCM olarak yerel bağlantı (127.0.0.1) üzerinden ana uygulamaya yollar.
-/// Görüntü kareleri yok sayılır; hiçbir şey kaydedilmez veya internete gönderilmez.
+/// Ekran yayını uzantısı: telefonda çalan sesi (TikTok, YouTube vb.) ve uygulama isterse küçültülmüş gri
+/// ekran görüntüsünü yerel bağlantı (127.0.0.1) üzerinden ana uygulamaya yollar.
+/// Hiçbir şey kaydedilmez veya internete gönderilmez.
 final class SampleHandler: RPBroadcastSampleHandler {
     private var sender: AudioSender?
 

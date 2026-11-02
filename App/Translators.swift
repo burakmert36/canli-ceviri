@@ -1,4 +1,5 @@
 import Foundation
+import Network
 import Translation
 #if canImport(FoundationModels)
 import FoundationModels
@@ -9,9 +10,12 @@ enum APIError: LocalizedError {
     case badResponse
     case missingKey(String)
     case unsupported(String)
+    case offline
 
     var errorDescription: String? {
         switch self {
+        case .offline:
+            return "İnternet yok. İnternetsiz çeviri için iPhone Çeviri dil paketini indir (Çeviri motoru › iPhone Çeviri › Ayarla)."
         case .http(let code, let msg):
             switch code {
             case 401, 403: return "API anahtarı geçersiz (\(code)). \(msg)"
@@ -26,14 +30,18 @@ enum APIError: LocalizedError {
 }
 
 enum HTTP {
-    static let session: URLSession = {
+    static var session: URLSession = makeSession()
+
+    /// Testlerde sahte ağ yanıtları için ek URLProtocol sınıfları verilebilir.
+    static func makeSession(protocols: [AnyClass] = []) -> URLSession {
         let c = URLSessionConfiguration.default
         c.timeoutIntervalForRequest = 20
         c.timeoutIntervalForResource = 30
         c.waitsForConnectivity = false
         c.httpMaximumConnectionsPerHost = 4
+        if !protocols.isEmpty { c.protocolClasses = protocols + (c.protocolClasses ?? []) }
         return URLSession(configuration: c)
-    }()
+    }
 
     @discardableResult
     static func json(_ url: URL, method: String = "POST", headers: [String: String] = [:],
@@ -67,6 +75,75 @@ enum HTTP {
     }
 }
 
+/// İnternet bağlantısını izler (çevrimdışıyken bulut motorlarını hiç denemeden cihaz içi çeviriye geçmek için).
+final class NetworkMonitor {
+    static let shared = NetworkMonitor()
+    private let monitor = NWPathMonitor()
+    private let lock = NSLock()
+    private var online = true
+    private var forced: Bool?
+    /// Bağlantı durumu değişti (ana iş parçacığında).
+    var onChange: ((Bool) -> Void)?
+
+    private init() {
+        monitor.pathUpdateHandler = { [weak self] path in
+            guard let self = self else { return }
+            let now = path.status == .satisfied
+            self.lock.lock()
+            let changed = now != self.online
+            self.online = now
+            self.lock.unlock()
+            if changed { DispatchQueue.main.async { self.onChange?(now) } }
+        }
+        monitor.start(queue: DispatchQueue(label: "canliceviri.network"))
+    }
+
+    /// Testler için bağlantı durumunu zorlar (nil = gerçek durum).
+    var override: Bool? {
+        get { lock.lock(); defer { lock.unlock() }; return forced }
+        set { lock.lock(); forced = newValue; lock.unlock() }
+    }
+
+    var isOnline: Bool {
+        lock.lock(); defer { lock.unlock() }
+        return forced ?? online
+    }
+}
+
+/// Çeviri önbelleği: tekrar eden cümleler (nakarat, sabit replikler) için ağa ve yapay zekâya tekrar gidilmez.
+final class TranslationCache {
+    static let shared = TranslationCache()
+    private let lock = NSLock()
+    private var store: [String: String] = [:]
+    private var order: [String] = []
+    let capacity: Int
+
+    init(capacity: Int = 400) { self.capacity = capacity }
+
+    func get(_ key: String) -> String? {
+        lock.lock(); defer { lock.unlock() }
+        return store[key]
+    }
+
+    func set(_ key: String, _ value: String) {
+        guard !value.isEmpty else { return }
+        lock.lock(); defer { lock.unlock() }
+        if store[key] == nil { order.append(key) }
+        store[key] = value
+        if order.count > capacity {
+            let drop = order.count - capacity
+            for k in order.prefix(drop) { store.removeValue(forKey: k) }
+            order.removeFirst(drop)
+        }
+    }
+
+    func removeAll() {
+        lock.lock(); store.removeAll(); order.removeAll(); lock.unlock()
+    }
+
+    var count: Int { lock.lock(); defer { lock.unlock() }; return store.count }
+}
+
 /// Seçili motorlarla çeviri ve (bulut modunda) ses tanıma yapan servis.
 final class TranslationService {
     let cfg: EngineConfig
@@ -83,7 +160,63 @@ final class TranslationService {
 
     // MARK: Metin çevirisi
 
+    private func cacheKey(_ engine: String, _ text: String) -> String {
+        "\(engine)|\(cfg.sourceLang)>\(cfg.targetLang)|\(cfg.contentKind.rawValue)|\(text)"
+    }
+
+    private var engineID: String {
+        switch cfg.translator {
+        case .gemini: return "gemini:" + cfg.geminiModel
+        case .openai: return "openai:" + cfg.openaiModel
+        case .claude: return "claude:" + cfg.claudeModel
+        default: return cfg.translator.rawValue
+        }
+    }
+
+    /// Seçili motorla çevirir. Önbellekte varsa ağa gitmez; internet yoksa cihaz içi çeviriye geçer.
     func translate(_ text: String, context: [String]) async throws -> String {
+        let key = cacheKey(engineID, text)
+        if let hit = TranslationCache.shared.get(key) { return hit }
+        let out: String
+        if !NetworkMonitor.shared.isOnline && cfg.translator != .apple && cfg.translator != .appleAI {
+            out = try await offline(text, context: context)
+        } else {
+            out = try await translateOnline(text, context: context)
+        }
+        let cleaned = Self.clean(out)
+        TranslationCache.shared.set(key, cleaned)
+        return cleaned
+    }
+
+    /// Hibrit modda konuşma sürerken kullanılan hızlı ve ücretsiz çeviri (Google, olmazsa cihaz içi).
+    func translateFast(_ text: String) async throws -> String {
+        let key = cacheKey("fast", text)
+        if let hit = TranslationCache.shared.get(key) { return hit }
+        let out: String
+        if !NetworkMonitor.shared.isOnline {
+            out = try await offline(text, context: [])
+        } else {
+            do {
+                out = try await google(text)
+            } catch {
+                if let a = try? await apple(text) { out = a } else { throw error }
+            }
+        }
+        let cleaned = Self.clean(out)
+        TranslationCache.shared.set(key, cleaned)
+        return cleaned
+    }
+
+    /// İnternet yokken: iPhone Çeviri (dil paketi gerekir), olmazsa Apple Zekâ.
+    private func offline(_ text: String, context: [String]) async throws -> String {
+        if let a = try? await apple(text), !a.isEmpty { return a }
+        if Self.appleIntelligenceAvailable, let r = try? await appleIntelligence(text, context: context), !r.isEmpty {
+            return r
+        }
+        throw APIError.offline
+    }
+
+    private func translateOnline(_ text: String, context: [String]) async throws -> String {
         let out: String
         switch cfg.translator {
         case .google:
@@ -105,7 +238,7 @@ final class TranslationService {
         case .openai: out = try await openAIChat(text, context: context)
         case .claude: out = try await claude(text, context: context)
         }
-        return Self.clean(out)
+        return out
     }
 
     static func clean(_ s: String) -> String {
@@ -127,7 +260,7 @@ final class TranslationService {
         Write natural, fluent, conversational \(tgt) exactly as a skilled subtitler would: keep the speaker's tone, slang and \
         emotion, keep names, be concise.
         Output ONLY the translation of the requested text. No quotes, no notes, no explanations, never translate the context lines.
-        """
+        """ + (cfg.contentKind.promptHint.map { "\n" + $0 } ?? "")
     }
 
     private func userPrompt(_ text: String, context: [String]) -> String {

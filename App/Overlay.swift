@@ -288,7 +288,8 @@ final class PiPManager: NSObject, AVPictureInPictureControllerDelegate, AVPictur
     }
 
     private func tryStart(_ c: AVPictureInPictureController) {
-        if c.isPictureInPictureActive { return }
+        // Bu arada durdurulduysa (hızlı başlat/durdur) bekleyen deneme kutuyu açmamalı.
+        if stopRequested || c.isPictureInPictureActive { return }
         if c.isPictureInPicturePossible {
             c.startPictureInPicture()
         } else if startAttempts < 25 {

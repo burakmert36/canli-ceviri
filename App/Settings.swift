@@ -32,6 +32,83 @@ enum TranslatorEngine: String, CaseIterable, Identifiable {
     var isLLM: Bool { self == .gemini || self == .openai || self == .claude || self == .appleAI }
 }
 
+/// Kutudaki ⏪ ⏩ düğmelerinin görevi.
+enum PiPButtonAction: String, CaseIterable, Identifiable {
+    case lines, language, off
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .lines: return "Satır sayısı"
+        case .language: return "Dil değiştir"
+        case .off: return "Kapalı"
+        }
+    }
+}
+
+/// İzlenen içeriğin türü: yapay zekâ çevirisine bağlam olarak verilir.
+enum ContentKind: String, CaseIterable, Identifiable {
+    case general, game, movie, music, news, education
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .general: return "Genel"
+        case .game: return "Oyun"
+        case .movie: return "Film / dizi"
+        case .music: return "Şarkı"
+        case .news: return "Haber / belgesel"
+        case .education: return "Eğitim / teknik"
+        }
+    }
+    var icon: String {
+        switch self {
+        case .general: return "sparkles"
+        case .game: return "gamecontroller.fill"
+        case .movie: return "film.fill"
+        case .music: return "music.note"
+        case .news: return "newspaper.fill"
+        case .education: return "graduationcap.fill"
+        }
+    }
+    /// Yapay zekâ istemine eklenen açıklama.
+    var promptHint: String? {
+        switch self {
+        case .general: return nil
+        case .game: return "The content is a video game (cutscene dialogue, characters talking, game terms). Keep game terminology, character and place names; street slang should stay slangy."
+        case .movie: return "The content is a film or TV series dialogue. Write short, natural subtitle lines that match each character's voice."
+        case .music: return "The content is song lyrics. Translate the meaning poetically but faithfully; keep it short and singable, do not explain."
+        case .news: return "The content is news or a documentary. Use clear, neutral, accurate wording and correct names of people, places and organisations."
+        case .education: return "The content is educational or technical. Keep technical terms precise (leave well-known English terms if they are commonly used)."
+        }
+    }
+}
+
+/// Kaynak → hedef dil çifti (hızlı dil değiştirme için).
+struct LangPair: Hashable, Identifiable {
+    let source: String
+    let target: String
+    var id: String { key }
+    var key: String { source + ">" + target }
+
+    init(source: String, target: String) {
+        self.source = source
+        self.target = target
+    }
+
+    init?(key: String) {
+        let parts = key.split(separator: ">", omittingEmptySubsequences: false).map(String.init)
+        guard parts.count == 2, Languages.source(parts[0]) != nil, Languages.target(parts[1]) != nil else { return nil }
+        source = parts[0]
+        target = parts[1]
+    }
+
+    /// "İngilizce → Türkçe" gibi kısa ad.
+    var title: String {
+        let s = Languages.source(source)?.english ?? source
+        let t = Languages.target(target)?.english ?? target
+        return "\(Languages.shortName(source: s, id: source)) → \(Languages.shortName(target: t, id: target))"
+    }
+}
+
 /// Çevrilecek metin nereden alınacak?
 enum InputSource: String, CaseIterable, Identifiable {
     case audio, screen
@@ -228,7 +305,8 @@ final class AppSettings: ObservableObject {
     /// Altyazı okuma alanı (ekran yüksekliğinin oranı, 0 = üst, 1 = alt)
     @Published var ocrTop: Double { didSet { d.set(ocrTop, forKey: "ocrTop") } }
     @Published var ocrBottom: Double { didSet { d.set(ocrBottom, forKey: "ocrBottom") } }
-    @Published var pipButtonsResize: Bool { didSet { d.set(pipButtonsResize, forKey: "pipButtonsResize") } }
+    /// Kutudaki ⏪ ⏩ düğmeleri: satır sayısı, dil değiştirme ya da kapalı.
+    @Published var pipButtons: PiPButtonAction { didSet { d.set(pipButtons.rawValue, forKey: "pipButtons") } }
     /// Altyazı alanı: elle seçilen (dikey ve yatay için ayrı) ya da otomatik.
     @Published var ocrAreaMode: OCRAreaMode { didSet { d.set(ocrAreaMode.rawValue, forKey: "ocrAreaMode") } }
     @Published var portraitArea: CGRect { didSet { d.set(Self.encode(portraitArea), forKey: "portraitArea") } }
@@ -270,6 +348,12 @@ final class AppSettings: ObservableObject {
     @Published var batteryMode: BatteryMode { didSet { d.set(batteryMode.rawValue, forKey: "batteryMode") } }
     /// Cümle bitmeden (konuşurken) çeviriyi güncelle. Kapalıysa yalnızca biten cümleler çevrilir.
     @Published var liveTranslation: Bool { didSet { d.set(liveTranslation, forKey: "liveTranslation") } }
+    /// Hibrit: konuşma sürerken ücretsiz hızlı motor, cümle bitince seçilen yapay zekâ çevirir.
+    @Published var hybridLive: Bool { didSet { d.set(hybridLive, forKey: "hybridLive") } }
+    /// İzlenen içeriğin türü (yapay zekâ çevirisine bağlam).
+    @Published var contentKind: ContentKind { didSet { d.set(contentKind.rawValue, forKey: "contentKind") } }
+    /// Son kullanılan dil çiftleri ("en-US>tr" biçiminde, en yenisi başta).
+    @Published var recentPairs: [String] { didSet { d.set(recentPairs, forKey: "recentPairs") } }
 
     // Diğer
     @Published var historyEnabled: Bool { didSet { d.set(historyEnabled, forKey: "historyEnabled") } }
@@ -331,7 +415,12 @@ final class AppSettings: ObservableObject {
         inputSource = InputSource(rawValue: d.string(forKey: "inputSource") ?? "") ?? .audio
         ocrTop = d.object(forKey: "ocrTop") as? Double ?? 0
         ocrBottom = d.object(forKey: "ocrBottom") as? Double ?? 1
-        pipButtonsResize = d.object(forKey: "pipButtonsResize") as? Bool ?? true
+        if let raw = d.string(forKey: "pipButtons"), let b = PiPButtonAction(rawValue: raw) {
+            pipButtons = b
+        } else {
+            // Eski "⏪ ⏩ ile satır sayısı" ayarını taşı.
+            pipButtons = (d.object(forKey: "pipButtonsResize") as? Bool ?? true) ? .lines : .off
+        }
         ocrAreaMode = OCRAreaMode(rawValue: d.string(forKey: "ocrAreaMode") ?? "") ?? .manual
         portraitArea = Self.decode(d.array(forKey: "portraitArea")) ?? AppSettings.defaultPortraitArea
         landscapeArea = Self.decode(d.array(forKey: "landscapeArea")) ?? AppSettings.defaultLandscapeArea
@@ -368,8 +457,93 @@ final class AppSettings: ObservableObject {
 
         batteryMode = BatteryMode(rawValue: d.string(forKey: "batteryMode") ?? "") ?? .auto
         liveTranslation = d.object(forKey: "liveTranslation") as? Bool ?? true
+        hybridLive = d.object(forKey: "hybridLive") as? Bool ?? true
+        contentKind = ContentKind(rawValue: d.string(forKey: "contentKind") ?? "") ?? .general
+        recentPairs = (d.stringArray(forKey: "recentPairs") ?? []).filter { LangPair(key: $0) != nil }
         historyEnabled = d.object(forKey: "historyEnabled") as? Bool ?? true
         onboardingDone = d.object(forKey: "onboardingDone") as? Bool ?? false
+        #if DEBUG
+        applyTestingArguments()
+        #endif
+    }
+
+    #if DEBUG
+    /// Otomatik testlerde (UI testleri) tanıtımı atlamak ve temiz ayarlarla başlamak için.
+    private func applyTestingArguments() {
+        let args = ProcessInfo.processInfo.arguments
+        if args.contains("--reset-settings") {
+            for key in d.dictionaryRepresentation().keys { d.removeObject(forKey: key) }
+            onboardingDone = false
+        }
+        if args.contains("--skip-onboarding") { onboardingDone = true }
+    }
+    #endif
+
+    var pipButtonsVisible: Bool {
+        switch pipButtons {
+        case .off: return false
+        case .lines: return !boxLocked
+        case .language: return true
+        }
+    }
+
+    // MARK: Hızlı dil değiştirme
+
+    static let defaultPairs = ["en-US>tr", "tr-TR>en", "de-DE>tr", "es-ES>tr"]
+
+    var currentPair: LangPair { LangPair(source: sourceLang, target: targetLang) }
+
+    /// Bu dil çifti mevcut motorlarla kullanılabilir mi?
+    func isUsable(_ p: LangPair, input: InputSource? = nil) -> Bool {
+        guard p.source == "auto" else { return p.source != "" }
+        let i = input ?? inputSource
+        if i == .audio && asr == .apple { return false }
+        if translator == .apple && displayMode != .original { return false }
+        return true
+    }
+
+    /// Hızlı değiştirme listesi: son kullanılanlar, azsa yaygın çiftlerle tamamlanır.
+    func quickPairs(input: InputSource? = nil) -> [LangPair] {
+        var out: [LangPair] = []
+        for key in recentPairs + Self.defaultPairs {
+            guard let p = LangPair(key: key), isUsable(p, input: input), !out.contains(p) else { continue }
+            if out.count >= 4 && !recentPairs.contains(key) { break }
+            out.append(p)
+            if out.count >= 6 { break }
+        }
+        return out
+    }
+
+    /// Şu anki dil çiftini "son kullanılanlar"ın başına yazar.
+    func rememberCurrentPair() {
+        let k = currentPair.key
+        guard LangPair(key: k) != nil else { return }
+        var list = recentPairs.filter { $0 != k }
+        list.insert(k, at: 0)
+        if list.count > 5 { list = Array(list.prefix(5)) }
+        if list != recentPairs { recentPairs = list }
+    }
+
+    func apply(_ p: LangPair) {
+        if sourceLang != p.source { sourceLang = p.source }
+        if targetLang != p.target { targetLang = p.target }
+    }
+
+    /// Listede bir sonraki (ya da önceki) dil çiftine geçer.
+    @discardableResult
+    func cycleLanguagePair(forward: Bool = true, input: InputSource? = nil) -> LangPair? {
+        let list = quickPairs(input: input)
+        guard list.count >= 2 else { return nil }
+        let idx = list.firstIndex(of: currentPair)
+        let next: Int
+        if let i = idx {
+            next = (i + (forward ? 1 : -1) + list.count) % list.count
+        } else {
+            next = forward ? 0 : list.count - 1
+        }
+        let p = list[next]
+        apply(p)
+        return p
     }
 
     func changeLines(by delta: Int) {
@@ -452,6 +626,8 @@ struct EngineConfig {
     var claudeModel: String
     var input: InputSource
     var displayMode: DisplayMode
+    var hybrid: Bool
+    var contentKind: ContentKind
 
     init(_ s: AppSettings, mode: RunMode = .screen) {
         sourceLang = s.sourceLang
@@ -460,6 +636,8 @@ struct EngineConfig {
         translator = s.translator
         input = mode == .camera ? s.camInput : s.inputSource
         displayMode = s.displayMode
+        hybrid = s.hybridLive
+        contentKind = s.contentKind
         geminiKey = s.geminiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         openaiKey = s.openaiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         claudeKey = s.claudeKey.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -479,6 +657,8 @@ struct EngineConfig {
     /// Ses modunda Apple tanıma mı kullanılıyor?
     var usesAppleASR: Bool { input == .audio && asr == .apple }
     var usesCloudASR: Bool { input == .audio && asr != .apple }
+    /// Konuşma sürerken (canlı kısım) ücretsiz hızlı motor mu kullanılsın?
+    var hybridActive: Bool { hybrid && translator.isLLM }
     var sourceEnglishName: String { Languages.source(sourceLang)?.english ?? "the original language" }
     var targetEnglishName: String { Languages.target(targetLang)?.english ?? targetLang }
     /// Seslendirmede kullanılacak dil kodları

@@ -27,7 +27,11 @@ targets:
     dependencies:
       - target: Broadcast
         embed: true
-    scheme: {}
+    scheme:
+      testTargets:
+        - CanliCeviriTests
+        - CanliCeviriUITests
+      gatherCoverageData: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.canliceviri.app
@@ -80,3 +84,29 @@ targets:
           NSExtensionPointIdentifier: com.apple.broadcast-services-upload
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).SampleHandler
           RPBroadcastProcessMode: RPBroadcastProcessModeSampleBuffer
+
+  # Otomatik testler (yalnızca simülatörde çalışır; uygulamaya/IPA'ya dahil edilmez)
+  CanliCeviriTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests/Unit
+      - path: Broadcast/AudioSender.swift
+    dependencies:
+      - target: CanliCeviri
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.canliceviri.app.tests
+        GENERATE_INFOPLIST_FILE: "YES"
+
+  CanliCeviriUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: Tests/UI
+    dependencies:
+      - target: CanliCeviri
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.canliceviri.app.uitests
+        GENERATE_INFOPLIST_FILE: "YES"
