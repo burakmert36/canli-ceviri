@@ -199,20 +199,13 @@ struct SettingsTab: View {
             Picker("Çeviri dili", selection: $s.targetLang) {
                 ForEach(Languages.targets) { Text($0.name).tag($0.id) }
             }
-            Picker("Ses tanıma", selection: $s.asr) {
-                ForEach(ASREngine.allCases) { Text($0.title).tag($0) }
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Ses tanıma").font(.subheadline)
+                ASRPicker()
             }
-            Picker("Çeviri motoru", selection: $s.translator) {
-                ForEach(TranslatorEngine.allCases) { Text($0.title).tag($0) }
-            }
-            if s.translator == .apple {
-                Button("Apple Çeviri dil paketini indir") {
-                    if s.sourceLang != "auto" {
-                        downloadConfig = TranslationSession.Configuration(
-                            source: Locale.Language(identifier: Languages.appleLanguageID(s.sourceLang)),
-                            target: Locale.Language(identifier: Languages.appleLanguageID(s.targetLang)))
-                    }
-                }
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Çeviri motoru").font(.subheadline)
+                TranslatorPicker()
             }
         } header: {
             Text("Diller ve motorlar")

@@ -6,6 +6,7 @@ struct ScreenTab: View {
     @EnvironmentObject private var s: AppSettings
     @ObservedObject private var updates = UpdateChecker.shared
     @ObservedObject private var router = AppRouter.shared
+    @State private var showAreaPicker = false
 
     private var translating: Bool { s.displayMode != .original }
     private var boxAspect: CGFloat {
@@ -20,6 +21,7 @@ struct ScreenTab: View {
                 if updates.updateAvailable { updateSection }
                 controlSection
                 sourceSection
+                if translating { engineSection }
                 if s.inputSource == .screen { captionAreaSection }
                 boxSection
                 Section("Hızlı profil") {
@@ -30,6 +32,20 @@ struct ScreenTab: View {
             }
             .navigationTitle("Ekran Çevirisi")
             .navigationBarTitleDisplayMode(.inline)
+            .sheet(isPresented: $showAreaPicker) {
+                AreaPickerView().environmentObject(engine).environmentObject(s)
+            }
+        }
+    }
+
+    private var engineSection: some View {
+        Section {
+            TranslatorPicker()
+                .listRowInsets(EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12))
+        } header: {
+            Text("Çeviri motoru")
+        } footer: {
+            Text("Ücretsiz: Google, iPhone Çeviri, Apple Zekâ. Gemini / ChatGPT / Claude daha doğal çevirir; kendi anahtarınla çalışır. Seçili motorun modelini “Ayarla”dan değiştirebilirsin.")
         }
     }
 
@@ -110,6 +126,9 @@ struct ScreenTab: View {
             }
             .pickerStyle(.segmented)
 
+            if s.inputSource == .audio {
+                ASRPicker()
+            }
             Picker("Videonun dili", selection: $s.sourceLang) {
                 ForEach(Languages.sources(for: s.inputSource == .audio ? s.asr : .gemini)) {
                     Text($0.name).tag($0.id)
@@ -139,64 +158,33 @@ struct ScreenTab: View {
 
     private var captionAreaSection: some View {
         Section {
-            Toggle("Altyazının yerini otomatik bul", isOn: $s.ocrAuto)
-            DisclosureGroup("Kontrol et ve ince ayar") {
-            if let img = engine.ocrPreview {
-                previewImage(img)
-                if !engine.ocrPreviewText.isEmpty {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Bu alanda okunan:").font(.caption).foregroundStyle(.secondary)
-                        Text(engine.ocrPreviewText).font(.footnote)
+            Picker("Alan", selection: $s.ocrAreaMode) {
+                ForEach(OCRAreaMode.allCases) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            if s.ocrAreaMode == .manual {
+                Button {
+                    showAreaPicker = true
+                } label: {
+                    HStack(spacing: 12) {
+                        AreaThumb(rect: s.portraitArea, landscape: false)
+                        AreaThumb(rect: s.landscapeArea, landscape: true)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Altyazı alanını seç").font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
+                            Text("Dikey ve yatay video için ayrı").font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
                     }
                 }
-            } else {
-                Text("Videoyu izlerken bu uygulamaya geri dönersen son ekran ve okunan alan burada görünür.")
-                    .font(.footnote).foregroundStyle(.secondary)
-            }
-            if !s.ocrAuto {
-                VStack(alignment: .leading) {
-                    Text("Üst sınır: %\(Int(s.ocrTop * 100))")
-                    Slider(value: Binding(get: { s.ocrTop }, set: { s.ocrTop = min($0, s.ocrBottom - 0.05) }), in: 0...0.95)
-                }
-                VStack(alignment: .leading) {
-                    Text("Alt sınır: %\(Int(s.ocrBottom * 100))")
-                    Slider(value: Binding(get: { s.ocrBottom }, set: { s.ocrBottom = max($0, s.ocrTop + 0.05) }), in: 0.05...1)
-                }
-            }
             }
         } header: {
-            Text("Altyazı yeri")
+            Text("Altyazı alanı")
         } footer: {
-            Text(s.ocrAuto
-                 ? "Uygulama videonun oynadığı bölgeyi kendisi bulur: dikeyde üstteki oynatıcıyı, yatayda tüm ekranı. Başlık, beğeni, yorum ve süre gibi yazılar okunmaz. Kontrol etmek için: videoyu izlerken uygulamaya dön; sarı çerçeve bulunan alanı gösterir."
-                 : "Elle modda sarı şerit altyazının çıktığı yatay bölgeyi kapsamalı. Dikey ve yatay izleme için farklı ayar gerekebilir; otomatik mod önerilir.")
+            Text(s.ocrAreaMode == .manual
+                 ? "Uygulama, video o an dikey mi yatay mı oynuyor kendisi anlar ve senin o yön için seçtiğin alanı okur. En iyi sonuç için: Başlat → YouTube'da altyazılı videoyu aç → 2–3 sn sonra buraya dön → “Altyazı alanını seç”: gerçek ekran görüntüsü üstünde 4 köşeden ayarlarsın."
+                 : "Otomatik mod videonun oynadığı bölgeyi kendisi bulmaya çalışır; her videoda doğru çalışmayabilir. Sorun olursa “Seçtiğim alan”a geç.")
         }
-    }
-
-    private func previewImage(_ img: UIImage) -> some View {
-        ZStack {
-            Image(uiImage: img).resizable().scaledToFit()
-            if let area = engine.ocrPreviewArea {
-                GeometryReader { geo in
-                    let W = geo.size.width, H = geo.size.height
-                    let r = CGRect(x: area.minX * W, y: area.minY * H, width: area.width * W, height: area.height * H)
-                    ZStack(alignment: .topLeading) {
-                        Path { p in
-                            p.addRect(CGRect(origin: .zero, size: geo.size))
-                            p.addRect(r)
-                        }
-                        .fill(Color.black.opacity(0.5), style: FillStyle(eoFill: true))
-                        RoundedRectangle(cornerRadius: 4)
-                            .strokeBorder(Color.yellow, lineWidth: 2)
-                            .frame(width: r.width, height: r.height)
-                            .offset(x: r.minX, y: r.minY)
-                    }
-                }
-            }
-        }
-        .aspectRatio(img.size, contentMode: .fit)
-        .frame(maxHeight: 360)
-        .frame(maxWidth: .infinity)
     }
 
     private var boxSection: some View {

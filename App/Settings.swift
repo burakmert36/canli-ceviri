@@ -51,6 +51,19 @@ enum InputSource: String, CaseIterable, Identifiable {
     }
 }
 
+/// Ekran modunda altyazı alanı nasıl belirlenir?
+enum OCRAreaMode: String, CaseIterable, Identifiable {
+    case manual, auto
+    var id: String { rawValue }
+    var title: String { self == .manual ? "Seçtiğim alan" : "Otomatik (deneysel)" }
+}
+
+/// Bir yapay zekâ sağlayıcısının seçilebilir modeli.
+struct ModelOption: Identifiable, Hashable {
+    let id: String
+    let note: String
+}
+
 /// Uygulamanın çalışma biçimi: telefonun kendi ekranı (yayın + kutu) ya da kamera/mikrofon (TV).
 enum RunMode {
     case screen, camera
@@ -216,6 +229,10 @@ final class AppSettings: ObservableObject {
     @Published var ocrTop: Double { didSet { d.set(ocrTop, forKey: "ocrTop") } }
     @Published var ocrBottom: Double { didSet { d.set(ocrBottom, forKey: "ocrBottom") } }
     @Published var pipButtonsResize: Bool { didSet { d.set(pipButtonsResize, forKey: "pipButtonsResize") } }
+    /// Altyazı alanı: elle seçilen (dikey ve yatay için ayrı) ya da otomatik.
+    @Published var ocrAreaMode: OCRAreaMode { didSet { d.set(ocrAreaMode.rawValue, forKey: "ocrAreaMode") } }
+    @Published var portraitArea: CGRect { didSet { d.set(Self.encode(portraitArea), forKey: "portraitArea") } }
+    @Published var landscapeArea: CGRect { didSet { d.set(Self.encode(landscapeArea), forKey: "landscapeArea") } }
     /// Altyazının yerini otomatik bul (video oynayan bölge). Kapalıysa üst/alt sınır elle seçilir.
     @Published var ocrAuto: Bool { didSet { d.set(ocrAuto, forKey: "ocrAuto") } }
     /// Kutu boyutu ayarlarını kilitler (⏪ ⏩ ve boyut ayarları kapanır).
@@ -260,7 +277,40 @@ final class AppSettings: ObservableObject {
 
     static let linesRange = 1...8
 
-    static let defaultGeminiModel = "gemini-3.1-flash-lite"
+    /// Dikey YouTube'da üstteki oynatıcı; yatay tam ekranda alttaki altyazı bölgesi.
+    static let defaultPortraitArea = CGRect(x: 0, y: 0.05, width: 1, height: 0.32)
+    static let defaultLandscapeArea = CGRect(x: 0.08, y: 0.58, width: 0.84, height: 0.4)
+
+    private static func encode(_ r: CGRect) -> [Double] {
+        [Double(r.minX), Double(r.minY), Double(r.width), Double(r.height)]
+    }
+    private static func decode(_ a: [Any]?) -> CGRect? {
+        guard let v = a as? [Double], v.count == 4 else { return nil }
+        return CGRect(x: v[0], y: v[1], width: v[2], height: v[3])
+    }
+
+    static let geminiModels = [
+        ModelOption(id: "gemini-3.5-flash-lite", note: "En hızlı ve ucuz (önerilen)"),
+        ModelOption(id: "gemini-3.1-flash-lite", note: "Hızlı"),
+        ModelOption(id: "gemini-3.6-flash", note: "Dengeli"),
+        ModelOption(id: "gemini-3.8-flash", note: "En kaliteli"),
+    ]
+    static let openaiModels = [
+        ModelOption(id: "gpt-5.4-nano", note: "En hızlı ve ucuz (önerilen)"),
+        ModelOption(id: "gpt-5.4-mini", note: "Dengeli"),
+        ModelOption(id: "gpt-5.6-luna", note: "Yeni nesil, hızlı"),
+        ModelOption(id: "gpt-5.6-terra", note: "Yüksek kalite"),
+    ]
+    static let openaiASRModels = [
+        ModelOption(id: "gpt-4o-mini-transcribe", note: "Hızlı (önerilen)"),
+        ModelOption(id: "gpt-4o-transcribe", note: "Daha doğru"),
+    ]
+    static let claudeModels = [
+        ModelOption(id: "claude-haiku-5-5", note: "Hızlı ve ucuz (önerilen)"),
+        ModelOption(id: "claude-sonnet-5-5", note: "Yüksek kalite"),
+    ]
+
+    static let defaultGeminiModel = "gemini-3.5-flash-lite"
     static let defaultOpenAIModel = "gpt-5.4-nano"
     static let defaultOpenAIASRModel = "gpt-4o-mini-transcribe"
     static let defaultClaudeModel = "claude-haiku-5-5"
@@ -282,6 +332,9 @@ final class AppSettings: ObservableObject {
         ocrTop = d.object(forKey: "ocrTop") as? Double ?? 0
         ocrBottom = d.object(forKey: "ocrBottom") as? Double ?? 1
         pipButtonsResize = d.object(forKey: "pipButtonsResize") as? Bool ?? true
+        ocrAreaMode = OCRAreaMode(rawValue: d.string(forKey: "ocrAreaMode") ?? "") ?? .manual
+        portraitArea = Self.decode(d.array(forKey: "portraitArea")) ?? AppSettings.defaultPortraitArea
+        landscapeArea = Self.decode(d.array(forKey: "landscapeArea")) ?? AppSettings.defaultLandscapeArea
         ocrAuto = d.object(forKey: "ocrAuto") as? Bool ?? true
         boxLocked = d.object(forKey: "boxLocked") as? Bool ?? false
 

@@ -22,11 +22,9 @@ final class Engine: ObservableObject {
     @Published private(set) var status = "Hazır"
     @Published private(set) var paused = false
     @Published private(set) var boxVisible = false
-    /// Altyazı alanı ayarı için son ekran görüntüsü ve orada okunan yazı.
-    @Published private(set) var ocrPreview: UIImage?
-    @Published private(set) var ocrPreviewText = ""
-    /// Önizlemede gösterilecek okuma alanı (sol üst köşe başlangıçlı, 0–1).
-    @Published private(set) var ocrPreviewArea: CGRect?
+    /// Altyazı alanı seçicisi için son alınan dikey / yatay ekran görüntüsü var mı?
+    @Published private(set) var hasPortraitShot = false
+    @Published private(set) var hasLandscapeShot = false
     /// Uygulama içinde gösterilen (kamera modu) son metinler.
     @Published private(set) var shownOriginal = ""
     @Published private(set) var shownTranslation = ""
@@ -80,8 +78,8 @@ final class Engine: ObservableObject {
 
     // Uygulama durumu (ekran okuma yalnızca başka uygulamadayken yapılır)
     private var appInBackground = false
-    private var lastOutsideFrame: ScreenFrame?
-    private var previewFrame: ScreenFrame?
+    private var lastPortraitFrame: ScreenFrame?
+    private var lastLandscapeFrame: ScreenFrame?
 
     // Çeviri istekleri (segment başına en fazla 1 eşzamanlı istek)
     private var inFlight = Set<Int>()
@@ -163,12 +161,8 @@ final class Engine: ObservableObject {
         nc.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { [weak self] _ in
             guard let self = self else { return }
             self.appInBackground = false
-            // Başka uygulamadayken alınan son kareyi altyazı alanı ayarı için göster.
-            if let f = self.lastOutsideFrame {
-                self.previewFrame = f
-                self.ocrPreview = ScreenTextReader.image(from: f)
-                self.refreshPreviewText()
-            }
+            self.hasPortraitShot = self.lastPortraitFrame != nil
+            self.hasLandscapeShot = self.lastLandscapeFrame != nil
         }
         nc.addObserver(forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: .main) { [weak self] _ in
             self?.handleMemoryWarning()
@@ -384,11 +378,15 @@ final class Engine: ObservableObject {
     // MARK: - Tanıma
 
     private func configureReader() {
-        let area = runMode == .camera
-            ? settings.cameraRect
-            : ScreenTextReader.band(top: settings.ocrTop, bottom: settings.ocrBottom)
-        reader.configure(area: area, auto: runMode == .screen && settings.ocrAuto,
-                         sourceLang: running ? cfg.sourceLang : settings.sourceLang, fast: saving)
+        let lang = running ? cfg.sourceLang : settings.sourceLang
+        if runMode == .camera {
+            let r = settings.cameraRect
+            reader.configure(portrait: r, landscape: r, auto: false, sourceLang: lang, fast: saving)
+        } else {
+            // Video dikey ya da yatay oynarken her biri için kullanıcının seçtiği ayrı alan kullanılır.
+            reader.configure(portrait: settings.portraitArea, landscape: settings.landscapeArea,
+                             auto: settings.ocrAreaMode == .auto, sourceLang: lang, fast: saving)
+        }
     }
 
     private func startRecognition() -> Bool {
@@ -457,7 +455,6 @@ final class Engine: ObservableObject {
         styleVersion += 1
         pip.showsSkipButtons = settings.pipButtonsResize && !settings.boxLocked
         configureReader()
-        refreshPreviewText()
         renderNow()
         guard running else { return }
         let new = EngineConfig(settings, mode: runMode)
@@ -533,7 +530,7 @@ final class Engine: ObservableObject {
             guard let self = self else { return }
             // Kendi uygulamamız açıkken ekranda kendi ayarlarımız var; onları okumayalım.
             guard self.appInBackground else { return }
-            self.lastOutsideFrame = frame
+            if frame.isLandscape { self.lastLandscapeFrame = frame } else { self.lastPortraitFrame = frame }
             guard self.running, self.runMode == .screen, self.screenMode, !self.paused else { return }
             self.submitForReading(frame)
         }
@@ -576,8 +573,10 @@ final class Engine: ObservableObject {
     }
 
     private func handleMemoryWarning() {
-        lastOutsideFrame = nil
-        if !(UIApplication.shared.applicationState == .active) { previewFrame = nil; ocrPreview = nil }
+        if UIApplication.shared.applicationState != .active {
+            lastPortraitFrame = nil
+            lastLandscapeFrame = nil
+        }
         if committed.count > 10 { committed.removeFirst(committed.count - 10) }
     }
 
@@ -607,23 +606,27 @@ final class Engine: ObservableObject {
         scheduleRender()
     }
 
-    /// Altyazı alanı ayarında, seçili alanda okunan yazıyı gösterir.
-    private func refreshPreviewText() {
-        guard let f = previewFrame else { return }
-        let area: CGRect
-        if settings.ocrAuto {
-            area = reader.lastDetectedArea ?? CGRect(x: 0, y: 0, width: 1, height: 1)
-        } else {
-            area = ScreenTextReader.band(top: settings.ocrTop, bottom: settings.ocrBottom)
-        }
-        ocrPreviewArea = area
-        reader.recognizeOnce(f, area: area, sourceLang: settings.sourceLang) { [weak self] lines in
+    // MARK: Altyazı alanı seçicisi
+
+    /// Başka uygulamadayken alınan son dikey/yatay ekran görüntüsü.
+    func capturedShot(landscape: Bool) -> UIImage? {
+        guard let f = landscape ? lastLandscapeFrame : lastPortraitFrame else { return nil }
+        return ScreenTextReader.image(from: f)
+    }
+
+    /// Seçilen alanda ne okunduğunu gösterir.
+    func previewRead(landscape: Bool, area: CGRect, completion: @escaping (String) -> Void) {
+        guard let f = landscape ? lastLandscapeFrame : lastPortraitFrame else { completion(""); return }
+        reader.recognizeOnce(f, area: area, sourceLang: settings.sourceLang) { lines in
             let text = lines.map { $0.text }
                 .filter { !CaptionTracker.looksLikeInterface($0) }
                 .joined(separator: " ")
-            self?.ocrPreviewText = text.isEmpty ? "(Bu alanda altyazı bulunamadı)" : text
+            completion(text)
         }
     }
+
+    /// Otomatik modda bulunan son video alanı.
+    var detectedVideoArea: CGRect? { reader.lastDetectedArea }
 
     // MARK: Apple segmentleri
 

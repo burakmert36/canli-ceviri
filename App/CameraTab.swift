@@ -155,8 +155,16 @@ struct CameraTab: View {
             .pickerStyle(.segmented)
             .disabled(cameraRunning)
 
+            if s.camInput == .audio {
+                ASRPicker()
+            }
+
             LanguageBar(sourceOptions: Languages.sources(for: s.camInput == .audio ? s.asr : .gemini),
                         showTarget: s.displayMode != .original)
+
+            if s.displayMode != .original {
+                TranslatorPicker()
+            }
 
             HStack(spacing: 10) {
                 Toggle(isOn: $s.speakEnabled) {
@@ -205,7 +213,7 @@ struct CameraTab: View {
             StatusRow(connected: cameraRunning, running: cameraRunning, text: engine.status)
 
             if s.camInput == .screen {
-                Text("Sarı çerçeveyi sürükleyip köşesinden boyutlandırarak altyazının çıktığı yere yerleştir. Yansımayı azaltmak için cihazı TV'ye dik tut; yakınlaştırma ile altyazıyı büyüt.")
+                Text("Sarı çerçeveyi içinden sürükle, 4 köşesinden boyutlandır; yalnızca altyazının çıktığı yeri kapsasın. Yansımayı azaltmak için cihazı TV'ye dik tut; yakınlaştırma ile altyazıyı büyüt.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -227,71 +235,5 @@ struct CameraTab: View {
 
     private func openSettings() {
         if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
-    }
-}
-
-/// Kamera görüntüsü üzerinde sürüklenebilir ve köşesinden boyutlandırılabilir okuma alanı.
-struct AreaEditor: View {
-    @Binding var rect: CGRect
-    @State private var dragStart: CGRect?
-
-    var body: some View {
-        GeometryReader { g in
-            let W = max(1, g.size.width), H = max(1, g.size.height)
-            let r = CGRect(x: rect.minX * W, y: rect.minY * H, width: rect.width * W, height: rect.height * H)
-            ZStack(alignment: .topLeading) {
-                Path { p in
-                    p.addRect(CGRect(origin: .zero, size: g.size))
-                    p.addRect(r)
-                }
-                .fill(Color.black.opacity(0.42), style: FillStyle(eoFill: true))
-                .allowsHitTesting(false)
-
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(Color.yellow, lineWidth: 2.5)
-                    .background(Color.white.opacity(0.001))
-                    .frame(width: r.width, height: r.height)
-                    .offset(x: r.minX, y: r.minY)
-                    .gesture(
-                        DragGesture(minimumDistance: 2)
-                            .onChanged { v in
-                                let start = dragStart ?? rect
-                                if dragStart == nil { dragStart = rect }
-                                var x = start.minX + v.translation.width / W
-                                var y = start.minY + v.translation.height / H
-                                x = min(max(0, x), 1 - start.width)
-                                y = min(max(0, y), 1 - start.height)
-                                rect = CGRect(x: x, y: y, width: start.width, height: start.height)
-                            }
-                            .onEnded { _ in dragStart = nil }
-                    )
-
-                Text("Altyazı alanı")
-                    .font(.caption2.bold())
-                    .padding(.horizontal, 6).padding(.vertical, 2)
-                    .background(Capsule().fill(Color.yellow))
-                    .foregroundStyle(.black)
-                    .offset(x: r.minX + 6, y: max(2, r.minY - 22))
-                    .allowsHitTesting(false)
-
-                Circle()
-                    .fill(Color.yellow)
-                    .frame(width: 30, height: 30)
-                    .overlay(Image(systemName: "arrow.up.left.and.arrow.down.right")
-                        .font(.system(size: 12, weight: .bold)).foregroundStyle(.black))
-                    .offset(x: r.maxX - 15, y: r.maxY - 15)
-                    .gesture(
-                        DragGesture(minimumDistance: 1)
-                            .onChanged { v in
-                                let start = dragStart ?? rect
-                                if dragStart == nil { dragStart = rect }
-                                let w = min(max(0.12, start.width + v.translation.width / W), 1 - start.minX)
-                                let h = min(max(0.06, start.height + v.translation.height / H), 1 - start.minY)
-                                rect = CGRect(x: start.minX, y: start.minY, width: w, height: h)
-                            }
-                            .onEnded { _ in dragStart = nil }
-                    )
-            }
-        }
     }
 }

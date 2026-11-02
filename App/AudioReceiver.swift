@@ -9,6 +9,14 @@ struct ScreenFrame {
     let orientation: CGImagePropertyOrientation
     let pixels: Data   // width * height bayt, satır satır
     let time: Date
+
+    /// Görüntü dik çevrildiğinde yatay mı? (ör. YouTube tam ekran)
+    var isLandscape: Bool {
+        switch orientation {
+        case .left, .right, .leftMirrored, .rightMirrored: return height > width
+        default: return width > height
+        }
+    }
 }
 
 /// Yayın uzantısından gelen ses ve görüntüyü yalnızca 127.0.0.1 üzerinden dinler.

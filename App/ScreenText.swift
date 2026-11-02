@@ -15,8 +15,9 @@ final class ScreenTextReader {
     private let queue = DispatchQueue(label: "canliceviri.ocr", qos: .userInitiated)
     private let lock = NSLock()
     private var busy = false
-    /// Okuma alanı (sol üst köşe başlangıçlı, 0–1)
-    private var area = CGRect(x: 0, y: 0, width: 1, height: 1)
+    /// Okuma alanları (sol üst köşe başlangıçlı, 0–1): dikey ve yatay görüntü için ayrı
+    private var portraitArea = CGRect(x: 0, y: 0, width: 1, height: 1)
+    private var landscapeArea = CGRect(x: 0, y: 0, width: 1, height: 1)
     private var languages: [String]?
     /// Otomatik video alanı algılama (ekran modu)
     private var autoArea = false
@@ -31,13 +32,14 @@ final class ScreenTextReader {
     /// Okunan satırlar (ana iş parçacığında çağrılır).
     var onResult: (([OCRLine], ScreenFrame) -> Void)?
 
-    func configure(area: CGRect, auto: Bool, sourceLang: String, fast wantsFast: Bool = false) {
+    func configure(portrait: CGRect, landscape: CGRect, auto: Bool, sourceLang: String, fast wantsFast: Bool = false) {
         // Hızlı seviye yalnızca bazı Latin alfabeli dilleri destekler; desteklemiyorsa doğru seviyede kal.
         let fastLangs = wantsFast ? Self.visionLanguages(for: sourceLang, level: .fast) : nil
         let useFast = wantsFast && (sourceLang == "auto" ? false : fastLangs != nil)
         let langs = useFast ? fastLangs : Self.visionLanguages(for: sourceLang, level: .accurate)
         lock.lock()
-        self.area = Self.clamp(area)
+        portraitArea = Self.clamp(portrait)
+        landscapeArea = Self.clamp(landscape)
         if auto != autoArea { detectedArea = nil }
         autoArea = auto
         languages = langs
@@ -77,7 +79,8 @@ final class ScreenTextReader {
         lock.lock()
         if busy { lock.unlock(); return }
         busy = true
-        let manual = area, langs = languages, auto = autoArea, useFast = fast
+        let manual = frame.isLandscape ? landscapeArea : portraitArea
+        let langs = languages, auto = autoArea, useFast = fast
         lock.unlock()
         queue.async {
             var target: CGRect? = manual
