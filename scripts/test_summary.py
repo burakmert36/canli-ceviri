@@ -146,6 +146,11 @@ for key, title in SUITES:
         print("  Ölçümler:")
         for name, metric, avg in perf[:20]:
             print(f"    {name} — {metric}: ort. {avg}")
+    mem = re.findall(r"BELLEK: ([^\n]*)", log)
+    if mem:
+        print("  Bellek ölçümleri:")
+        for m in mem[:20]:
+            print("    " + m)
     crashes = re.findall(r".*(?:crashed|Crash: |Fatal error|EXC_BAD_ACCESS)[^\n]*", log)
     if crashes:
         all_ok = False

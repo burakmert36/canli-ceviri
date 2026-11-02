@@ -210,7 +210,9 @@ final class AudioReceiver {
         guard data.count > 5 else { return }
         let w = Int(data[data.startIndex]) | Int(data[data.startIndex + 1]) << 8
         let h = Int(data[data.startIndex + 2]) | Int(data[data.startIndex + 3]) << 8
-        let o = CGImagePropertyOrientation(rawValue: UInt32(data[data.startIndex + 4])) ?? .up
+        // Geçersiz yön değeri (bozuk veri) Vision'a gitmesin: yalnızca 1–8 geçerlidir.
+        let rawO = UInt32(data[data.startIndex + 4])
+        let o = (1...8).contains(rawO) ? (CGImagePropertyOrientation(rawValue: rawO) ?? .up) : .up
         guard w > 0, h > 0, data.count - 5 >= w * h else { return }
         let pixels = data.subdata(in: (data.startIndex + 5)..<(data.startIndex + 5 + w * h))
         onFrame?(ScreenFrame(width: w, height: h, orientation: o, pixels: pixels, time: Date()))

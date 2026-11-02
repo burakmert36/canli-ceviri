@@ -4,6 +4,7 @@ import CoreMedia
 import CoreVideo
 import AudioToolbox
 import Darwin
+import MachO
 @testable import CanliCeviri
 
 // MARK: - Bekleme
@@ -45,6 +46,25 @@ enum TestPorts {
         next += 1
         return next
     }
+}
+
+/// Thread/Address Sanitizer altında bellek kullanımı doğal olarak birkaç kat artar; eşikler buna göre gevşetilir.
+let sanitizerMemoryFactor: Double = {
+    for i in 0..<_dyld_image_count() {
+        guard let p = _dyld_get_image_name(i) else { continue }
+        let n = String(cString: p)
+        if n.contains("clang_rt.tsan") { return 3 }
+        if n.contains("clang_rt.asan") { return 2 }
+    }
+    return 1
+}()
+
+/// Bellek artışını günlüğe yazar (rapor için) ve eşikle karşılaştırır.
+func assertMemoryGrowth(_ growth: Double, below limit: Double, _ name: String,
+                        file: StaticString = #filePath, line: UInt = #line) {
+    let l = limit * sanitizerMemoryFactor
+    print(String(format: "BELLEK: %@ +%.1f MB (sınır %.0f MB)", name, growth, l))
+    XCTAssertLessThan(growth, l, "\(name): bellek \(growth) MB arttı", file: file, line: line)
 }
 
 /// Uygulamanın bellekteki kapladığı alan (MB).

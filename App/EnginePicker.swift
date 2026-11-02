@@ -42,6 +42,9 @@ struct TranslatorPicker: View {
                             chip(e)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel(e.shortName + ", " + status(e).0)
+                        .accessibilityAddTraits(s.translator == e ? .isSelected : [])
+                        .accessibilityIdentifier("engine-" + e.rawValue)
                     }
                 }
                 .padding(.vertical, 2)
@@ -58,6 +61,7 @@ struct TranslatorPicker: View {
                 .font(.footnote)
             }
             .buttonStyle(.borderless)
+            .accessibilityIdentifier("engine-configure")
         }
         .sheet(item: $sheetFor) { e in
             ProviderSheet(engine: e).environmentObject(s)

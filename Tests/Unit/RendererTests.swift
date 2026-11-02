@@ -76,8 +76,7 @@ final class RendererTests: XCTestCase {
                 _ = r.render(content(text, String(text.reversed()), mode: mode, lines: 1 + i % 8, font: CGFloat(36 + i % 64)))
             }
         }
-        let growth = memoryFootprintMB() - before
-        XCTAssertLessThan(growth, 60, "Çizim belleği \(growth) MB büyüdü")
+        assertMemoryGrowth(memoryFootprintMB() - before, below: 60, "3000 kutu çizimi")
     }
 
     func testRenderPerformance() {

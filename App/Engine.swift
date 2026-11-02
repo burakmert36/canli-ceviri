@@ -82,6 +82,9 @@ final class Engine: ObservableObject {
     private var appInBackground = false
     private var lastPortraitFrame: ScreenFrame?
     private var lastLandscapeFrame: ScreenFrame?
+    /// Ana iş parçacığına aktarılmayı bekleyen en yeni kare (kareler birikmez, yalnızca en yenisi tutulur).
+    private let frameLock = NSLock()
+    private var pendingFrame: ScreenFrame?
 
     // Çeviri istekleri (segment başına en fazla 1 eşzamanlı istek)
     private var inFlight = Set<Int>()
@@ -603,10 +606,20 @@ final class Engine: ObservableObject {
 
     // MARK: Görüntüdeki yazı (ekran ya da kamera)
 
-    /// Alıcı kuyruğunda çağrılır.
-    private func handleBroadcastFrame(_ frame: ScreenFrame) {
+    /// Alıcı kuyruğunda çağrılır. Ana iş parçacığı meşgulse eski kare bekletilmez, yenisiyle değiştirilir.
+    private func handleBroadcastFrame(_ incoming: ScreenFrame) {
+        frameLock.lock()
+        let schedule = pendingFrame == nil
+        pendingFrame = incoming
+        frameLock.unlock()
+        guard schedule else { return }
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
+            self.frameLock.lock()
+            let next = self.pendingFrame
+            self.pendingFrame = nil
+            self.frameLock.unlock()
+            guard let frame = next else { return }
             // Kendi uygulamamız açıkken ekranda kendi ayarlarımız var; onları okumayalım.
             guard self.readingAllowed else { return }
             if frame.isLandscape { self.lastLandscapeFrame = frame } else { self.lastPortraitFrame = frame }

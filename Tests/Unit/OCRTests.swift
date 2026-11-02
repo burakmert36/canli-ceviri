@@ -130,10 +130,12 @@ final class OCRTests: XCTestCase {
             // Üstte (0.05–0.35) sürekli değişen video, altta sabit yazılar
             var px = FakeScreen.gray(width: pw, height: ph, texts: [("Static title", 0.5), ("Comments 1.2K", 0.7)])
             var g = SeededRandom(seed: UInt64(i))
+            // Gerçek video gibi bitişik bir bölge: yumuşak geçişli, her karede değişen parlaklık bulutları
             let y0 = Int(0.05 * Double(ph)), y1 = Int(0.35 * Double(ph))
-            for y in stride(from: y0, to: y1, by: 1) {
-                for x in stride(from: 0, to: pw, by: 1) where (x / 25 + y / 25) % 2 == 0 {
-                    px[y * pw + x] = UInt8(truncatingIfNeeded: g.next())
+            let phase = Int(g.next() % 64)
+            for y in y0..<y1 {
+                for x in 0..<pw {
+                    px[y * pw + x] = UInt8(truncatingIfNeeded: ((x + phase * 3) / 7 + (y + phase) / 5) * 9 + phase)
                 }
             }
             region = d.update(ScreenFrame(width: pw, height: ph, orientation: .up, pixels: px, time: Date()))

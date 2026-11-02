@@ -111,7 +111,7 @@ final class IPCTests: XCTestCase {
         c.send(Data(repeating: 1, count: 4096))
         XCTAssertTrue(waitUntil(3) { self.disconnectCount >= 1 })
         XCTAssertEqual(frameCount, 0)
-        XCTAssertLessThan(memoryFootprintMB() - before, 50, "Sahte uzunluk büyük bellek ayırtmamalı")
+        assertMemoryGrowth(memoryFootprintMB() - before, below: 50, "4 GB uzunluk iddiası")
     }
 
     func testTruncatedAndInconsistentFramesAreIgnored() {
@@ -327,8 +327,7 @@ final class SenderReceiverTests: XCTestCase {
         guard let sb = SampleFactory.audio(fmt, frames: 4800, freq: 300) else { XCTFail(); return }
         for _ in 0..<6000 { sender.process(sb) }
         spin(2)
-        let growth = memoryFootprintMB() - before
-        XCTAssertLessThan(growth, 30, "Uzantının belleği \(growth) MB büyüdü; sınır yok mu?")
+        assertMemoryGrowth(memoryFootprintMB() - before, below: 30, "uzantı: alıcı donukken 10 dk ses")
         XCTAssertGreaterThan(sender.droppedMessages, 0, "Alıcı okumazken fazlası atlanmalı")
     }
 }

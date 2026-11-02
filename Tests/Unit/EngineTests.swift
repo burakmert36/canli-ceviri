@@ -169,7 +169,7 @@ final class EngineTests: XCTestCase {
         XCTAssertTrue(engine.running, "0,8 sn içindeki tekrar dokunuşlar yok sayılmalı")
         engine.stop()
         spin(0.5)
-        XCTAssertLessThan(memoryFootprintMB() - before, 80)
+        assertMemoryGrowth(memoryFootprintMB() - before, below: 80, "40 kez başlat/durdur")
     }
 
     func testFrameFloodKeepsMemoryAndStaysResponsive() {
@@ -199,8 +199,7 @@ final class EngineTests: XCTestCase {
         XCTAssertTrue(engine.paused)
         engine.togglePause()
         XCTAssertFalse(engine.paused)
-        let growth = memoryFootprintMB() - before
-        XCTAssertLessThan(growth, 120, "Kare yağmurunda bellek \(growth) MB arttı")
+        assertMemoryGrowth(memoryFootprintMB() - before, below: 60, "8 sn kare yağmuru (\(sent) kare)")
         engine.stop()
     }
 

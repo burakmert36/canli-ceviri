@@ -132,38 +132,48 @@ final class CanliCeviriUITests: XCTestCase {
         assertAlive("alan seçici")
     }
 
+    /// Yatay kart şeridinde bir kartı görünür yapar.
+    private func reveal(_ chip: XCUIElement) -> Bool {
+        if chip.exists && chip.isHittable { return true }
+        let row = app.scrollViews.containing(.button, identifier: "engine-google").firstMatch
+        guard row.exists else { return false }
+        for _ in 0..<3 where !chip.isHittable { row.swipeLeft() }
+        for _ in 0..<4 where !chip.isHittable { row.swipeRight() }
+        return chip.isHittable
+    }
+
     func testEnginePickerAndProviderSheets() {
         launch()
         tab("Ekran")
-        for name in ["Gemini", "ChatGPT", "Claude", "Google", "iPhone Çeviri", "Apple Zekâ"] {
-            let chip = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
-            guard scrollTo(chip, maxSwipes: 6) || chip.exists else {
-                XCTFail("Motor kartı yok: \(name)"); continue
-            }
-            if !chip.isHittable {
-                app.scrollViews.containing(.button, identifier: chip.identifier).firstMatch.swipeLeft()
-            }
+        let google = app.buttons["engine-google"]
+        XCTAssertTrue(google.waitForExistence(timeout: 5), "Çeviri motoru kartları yok")
+        var n = 0
+        while !google.isHittable && n < 6 { app.swipeUp(); n += 1 }
+        for id in ["gemini", "openai", "claude", "google", "apple", "appleAI"] {
+            let chip = app.buttons["engine-" + id]
+            guard chip.exists, reveal(chip) else { XCTFail("Motor kartı yok/görünmüyor: \(id)"); continue }
             chip.tap()
             let done = app.buttons["Bitti"].firstMatch
             if done.waitForExistence(timeout: 2) {
-                // Anahtar alanına yaz-sil, model seç
                 let field = app.secureTextFields.firstMatch
-                if field.exists {
+                if field.exists && field.isHittable {
                     field.tap()
                     field.typeText("abc")
                 }
                 done.tap()
+                XCTAssertTrue(chip.waitForExistence(timeout: 3))
             }
-            let configure = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Ayarla'")).firstMatch
+            XCTAssertTrue(chip.isSelected, "\(id) seçilmiş olmalı")
+            let configure = app.buttons["engine-configure"]
             if configure.exists && configure.isHittable {
                 configure.tap()
                 let d2 = app.buttons["Bitti"].firstMatch
-                if d2.waitForExistence(timeout: 3) { d2.tap() }
+                XCTAssertTrue(d2.waitForExistence(timeout: 3), "\(id) ayar sayfası açılmadı")
+                if d2.exists { d2.tap() }
             }
         }
         // Google'a geri dön (sonraki testler için)
-        let g = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Google'")).firstMatch
-        if g.exists { g.tap() }
+        if reveal(google) { google.tap() }
         assertAlive("motor seçimi")
     }
 
