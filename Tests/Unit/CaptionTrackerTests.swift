@@ -35,6 +35,27 @@ final class CaptionTrackerTests: XCTestCase {
         XCTAssertEqual(c.dynamicLines([line("Pinned banner text")], exclude: "", now: t0.addingTimeInterval(14)), [])
     }
 
+    /// Oyun videosunda tabelalar, köşedeki başlık ve kendi çeviri kutumuz okunmamalı; ortadaki altyazı okunmalı.
+    func testOffCenterTextIsNotCaption() {
+        let c = CaptionTracker()
+        _ = c.dynamicLines([], exclude: "")
+        var title = line("Huge news update here"); title.screenMidX = 0.22
+        var sign = line("LOMBANK FLEECA bank"); sign.screenMidX = 0.82
+        var cap = line("scraps before it flies away"); cap.screenMidX = 0.44   // kutu sağ ucunu örtüyor
+        XCTAssertEqual(c.dynamicLines([title, sign, cap], exclude: ""), ["scraps before it flies away"])
+    }
+
+    /// Kutumuz altyazının üstüne gelirse kendi Türkçe çevirimiz bozuk harflerle okunur; tanınıp atlanmalı.
+    func testOwnTranslationReadBackIsIgnored() {
+        let c = CaptionTracker()
+        _ = c.dynamicLines([], exclude: "")
+        let own = Set(CaptionTracker.foldedWords("Böylece sahibi yüzleşir ve gider. İşte kaçırdığınız her şey!"))
+        let r = c.dynamicLines([line("Boylece, sahibi yuzíeş ve gider"), line("Iste kacirdiginiz her sey!"),
+                                line("So the owner walks away")], exclude: "", ownWords: own)
+        XCTAssertEqual(r, ["So the owner walks away"])
+        XCTAssertFalse(CaptionTracker.isOwnText("the owner and the dog", ownWords: own))
+    }
+
     func testOwnBoxTextIsExcluded() {
         let c = CaptionTracker()
         _ = c.dynamicLines([], exclude: "")

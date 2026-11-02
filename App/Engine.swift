@@ -777,7 +777,7 @@ final class Engine: ObservableObject {
             guard readingAllowed else { return }
             let (o, t) = displayTexts()
             let exclude = CaptionTracker.normalize(o + " " + t)
-            fresh = captions.dynamicLines(lines, exclude: exclude)
+            fresh = captions.dynamicLines(lines, exclude: exclude, ownWords: ownTranslationWords(t))
         }
         // Ekran döndü (dikey ↔ yatay): yarım cümleyi kapat, yeni yönde temiz başla.
         if runMode == .screen {
@@ -809,15 +809,32 @@ final class Engine: ObservableObject {
         return ScreenTextReader.image(from: f)
     }
 
-    /// Seçilen alanda ne okunduğunu gösterir.
+    /// Seçilen alanda ne okunduğunu gösterir (çeviride kullanılacak satırlar: ortalanmış, arayüz ve kendi
+    /// kutumuz değil).
     func previewRead(landscape: Bool, area: CGRect, completion: @escaping (String) -> Void) {
         guard let f = landscape ? lastLandscapeFrame : lastPortraitFrame else { completion(""); return }
+        let own = ownTranslationWords(displayTexts().1)
         reader.recognizeOnce(f, area: area, sourceLang: settings.sourceLang) { lines in
-            let text = lines.map { $0.text }
-                .filter { !CaptionTracker.looksLikeInterface($0) }
+            let text = lines
+                .filter { CaptionTracker.isCentered($0) && !CaptionTracker.looksLikeInterface($0.text)
+                    && !CaptionTracker.isOwnText($0.text, ownWords: own) }
+                .map { $0.text }
                 .joined(separator: " ")
             completion(text)
         }
+    }
+
+    /// Kutudaki çevirinin kelimeleri: kutu altyazının üstüne gelip okunursa kendi yazımızı tanımak için.
+    /// Orijinalde de geçen kelimeler (isimler, çevrilmeyen sözcükler) çıkarılır; yoksa "Jason and Lucia" gibi
+    /// yeni bir altyazı kendi yazımız sanılabilir. Kaynak ve hedef aynı dilse boş.
+    private func ownTranslationWords(_ translation: String) -> Set<String> {
+        let src = (running ? cfg.sourceLang : settings.sourceLang).lowercased()
+        let tgt = (running ? cfg.targetLang : settings.targetLang).lowercased()
+        guard !translation.isEmpty, !src.hasPrefix(tgt) else { return [] }
+        var words = Set(CaptionTracker.foldedWords(translation))
+        let originals = (committed.suffix(6).map { $0.original } + [live.original]).joined(separator: " ")
+        words.subtract(CaptionTracker.foldedWords(originals))
+        return words
     }
 
     /// Otomatik modda bulunan son video alanı.

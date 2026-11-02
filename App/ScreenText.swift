@@ -8,6 +8,9 @@ struct OCRLine {
     let text: String
     /// Vision koordinatı (sol alt köşe başlangıçlı, 0–1), okuma alanına göre
     let box: CGRect
+    /// Satırın ekrandaki yatay orta noktası (0–1, görüntünün dik hâline göre). Okuma alanı ekranın ortasını
+    /// kapsamıyorsa 0,5 kalır (o durumda ortalanmışlık denetlenmez).
+    var screenMidX: CGFloat = 0.5
 }
 
 /// Ekran karelerinden yazı okur (Vision). Meşgulken gelen kareler atlanır.
@@ -136,7 +139,7 @@ final class ScreenTextReader {
                 let sig = Self.signature(frame, area: t)
                 let unchanged = Self.similar(sig, self.lastSignature) && Date().timeIntervalSince(self.lastOCRAt) < 3
                 if !unchanged {
-                    lines = Self.recognize(frame, area: t, languages: langs, fast: useFast)
+                    lines = Self.placeOnScreen(Self.recognize(frame, area: t, languages: langs, fast: useFast), area: t)
                     self.lastSignature = sig
                     self.lastOCRAt = Date()
                     self.lastReadHadText = Self.hasMeaningfulText(lines)
@@ -155,7 +158,7 @@ final class ScreenTextReader {
         let a = Self.clamp(area)
         let langs = Self.visionLanguages(for: sourceLang)
         queue.async {
-            let lines = Self.recognize(frame, area: a, languages: langs, fast: false)
+            let lines = Self.placeOnScreen(Self.recognize(frame, area: a, languages: langs, fast: false), area: a)
             DispatchQueue.main.async { completion(lines) }
         }
     }
@@ -301,6 +304,17 @@ final class ScreenTextReader {
         return lines.sorted { a, b in
             if abs(a.box.midY - b.box.midY) > 0.01 { return a.box.midY > b.box.midY }
             return a.box.minX < b.box.minX
+        }
+    }
+
+    /// Satırların ekrandaki yatay konumunu işaretler. Alan ekranın ortasını kapsamıyorsa (kullanıcı yana
+    /// yaslı bir alan seçtiyse) dokunulmaz: ortalanmışlık denetimi yapılmaz.
+    private static func placeOnScreen(_ lines: [OCRLine], area: CGRect) -> [OCRLine] {
+        guard area.minX < 0.4, area.maxX > 0.6 else { return lines }
+        return lines.map { l in
+            var m = l
+            m.screenMidX = area.minX + l.box.midX * area.width
+            return m
         }
     }
 
@@ -517,14 +531,19 @@ final class CaptionTracker {
 
     /// Ekranda yeni beliren (sabit olmayan) satırları döndürür.
     /// - Parameter exclude: Kendi kutumuzda gösterilen metin (normalleştirilmiş) — kendi yazımızı okumayalım.
-    func dynamicLines(_ lines: [OCRLine], exclude: String, now: Date = Date()) -> [String] {
+    /// - Parameter ownWords: Kutudaki çevirinin sadeleştirilmiş kelimeleri (`foldedWords`); kutu ekranda altyazının
+    ///   üstüne gelirse bozuk harflerle okunan kendi çevirimizi tanımak için.
+    func dynamicLines(_ lines: [OCRLine], exclude: String, ownWords: Set<String> = [], now: Date = Date()) -> [String] {
         var result: [String] = []
         let isBaseline = baselinePending
         baselinePending = false
         for line in lines {
+            // Altyazı yatayda ortalıdır: yana yaslı yazılar (oyundaki tabelalar, video başlığı, köşedeki kutumuz) değil.
+            guard Self.isCentered(line) else { continue }
             let n = Self.normalize(line.text)
             guard n.count >= 2 else { continue }
             if !exclude.isEmpty && exclude.contains(n) { continue }
+            if Self.isOwnText(line.text, ownWords: ownWords) { continue }
             if uiTexts.contains(n) || Self.looksLikeInterface(line.text) { continue }
             if seen[n] == nil, let last = everSeen[n], now.timeIntervalSince(last) > 3 {
                 // Kaybolup aynen geri gelen yazı altyazı değil, arayüzdür (bölüm adı, düğme vb.).
@@ -558,6 +577,29 @@ final class CaptionTracker {
         "yorumlar", "comments", "shorts", "canlı", "live", "atla", "skip", "skip ad", "reklamı atla",
         "sponsorlu", "sponsored", "daha fazla", "more", "katıl", "join",
     ]
+
+    /// Ortadan en fazla bu kadar (ekran genişliğinin oranı) kayan satır altyazı sayılır. Kutumuz altyazının bir
+    /// kısmını örtse bile görünen parça bu sınır içinde kalır.
+    static let centerTolerance: CGFloat = 0.15
+
+    static func isCentered(_ l: OCRLine) -> Bool { abs(l.screenMidX - 0.5) <= centerTolerance }
+
+    /// Karşılaştırma için sadeleştirilmiş kelimeler: küçük harf, aksansız, "ı" → "i". Kutumuzdaki Türkçe çeviri
+    /// İngilizce tanımayla okununca harfleri bozulur ("yüzleşir" → "yuzíeş"); böylece yine eşleşir.
+    static func foldedWords(_ s: String) -> [String] {
+        let plain = s.replacingOccurrences(of: "ı", with: "i").replacingOccurrences(of: "İ", with: "I")
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)
+        return normalize(plain).split(separator: " ").map(String.init)
+    }
+
+    /// Satır, kutumuzda gösterilen çevirinin (bozuk okunmuş) kopyası mı? (en az 3 kelime, %60'ı kutuda geçiyor)
+    static func isOwnText(_ text: String, ownWords: Set<String>) -> Bool {
+        guard !ownWords.isEmpty else { return false }
+        let ws = foldedWords(text)
+        guard ws.count >= 3 else { return false }
+        let hits = ws.filter { ownWords.contains($0) }.count
+        return Double(hits) / Double(ws.count) >= 0.6
+    }
 
     /// YouTube ve benzeri uygulamaların arayüz yazılarına benziyor mu? (süre, @kanal, sayılar, kesik başlık…)
     static func looksLikeInterface(_ raw: String) -> Bool {
