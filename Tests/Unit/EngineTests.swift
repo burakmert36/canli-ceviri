@@ -45,6 +45,35 @@ final class EngineTests: XCTestCase {
         s.lines = 3
         engine.simulateBackground = true
         spin(0.4)   // ayar değişikliklerinin (250 ms gecikmeli) işlenmesi
+        warmUpOnce()
+    }
+
+    private static var warmedUp = false
+
+    /// Motorun ilk açılışı (ses oturumu, PiP, yazı tanıma modeli) simülatörde saniyeler sürebilir.
+    /// Bu tek seferlik süre ilk testin zamanlamasına binmesin diye bir kez boşta çalıştırılır.
+    private func warmUpOnce() {
+        guard !Self.warmedUp else { return }
+        Self.warmedUp = true
+        let inputBefore = s.inputSource
+        s.inputSource = .screen
+        spin(0.4)
+        guard let c = TCPClient(port: AudioReceiver.port, timeout: 10) else { return }
+        c.startHeartbeat()
+        _ = waitUntil(10) { self.engine.audioConnected }
+        engine.start()
+        sendRepeatedly(c, frame("Warm up line for the reader"), times: 3)
+        engine.stop()
+        spin(0.5)
+        c.close()
+        _ = waitUntil(10) { !self.engine.audioConnected }
+        s.inputSource = inputBefore
+        spin(0.4)
+    }
+
+    /// Hata iletisine eklenen kısa tanı: motor durumu ve bağlantı günlüğünün sonu.
+    private func diag() -> String {
+        "durum: \(engine.status) | günlük: " + ConnectionLog.shared.entries.suffix(8).joined(separator: " ¦ ")
     }
 
     override func tearDown() {
@@ -75,6 +104,20 @@ final class EngineTests: XCTestCase {
 
     private let pw = 600, ph = 1300
 
+    /// Koşul sağlanana dek kareyi aralıklarla yollar. Gerçek yayında da yazı ekrandayken kare sürekli gelir;
+    /// okuyucu meşgulken gelen kare atlanır, bu yüzden sabit sayıda kare yollamak yavaş makinede yetmeyebilir.
+    @discardableResult
+    private func sendUntil(_ c: TCPClient, _ data: Data, timeout: TimeInterval = 25, gap: TimeInterval = 0.5,
+                           _ done: () -> Bool) -> Bool {
+        let end = Date().addingTimeInterval(timeout)
+        while Date() < end {
+            if done() { return true }
+            c.send(data)
+            if waitUntil(gap, done) { return true }
+        }
+        return done()
+    }
+
     /// Aynı kareyi birkaç kez yollar (okuyucu meşgulken gelen kare atlanır; gerçek yayında da kareler tekrar gelir).
     private func sendRepeatedly(_ c: TCPClient, _ data: Data, times: Int = 4, gap: TimeInterval = 0.6) {
         for _ in 0..<times {
@@ -103,12 +146,11 @@ final class EngineTests: XCTestCase {
         XCTAssertTrue(cmds.contains("m"), "ses kapatma: \(cmds)")
 
         sendRepeatedly(c, frame(nil), times: 2)           // ilk kare: sabit yazılar öğrenilir
-        sendRepeatedly(c, frame("Hello my good friend"))
-        sendRepeatedly(c, frame("my good friend how are you today"))
-        let ok = waitUntil(20) {
+        sendUntil(c, frame("Hello my good friend")) { self.engine.shownOriginal.lowercased().contains("friend") }
+        let ok = sendUntil(c, frame("my good friend how are you today")) {
             self.engine.shownOriginal.lowercased().contains("today") && self.engine.shownTranslation.contains("TR(")
         }
-        XCTAssertTrue(ok, "orijinal: \(engine.shownOriginal) | çeviri: \(engine.shownTranslation) | durum: \(engine.status)")
+        XCTAssertTrue(ok, "orijinal: \(engine.shownOriginal) | çeviri: \(engine.shownTranslation) | \(diag())")
         XCTAssertFalse(engine.shownOriginal.lowercased().contains("title"), "Başlık alan dışında kalmalı")
         // Kayan altyazı tekrar etmemeli (kutuda son kesinleşen + canlı cümle görünür)
         let o = engine.shownOriginal.lowercased()
@@ -261,13 +303,16 @@ final class EngineTests: XCTestCase {
         guard let c = connectExtension() else { return }
         engine.start()
         c.close()
-        XCTAssertTrue(waitUntil(5) { !self.engine.audioConnected })
+        XCTAssertTrue(waitUntil(10) { !self.engine.audioConnected }, "Kopma algılanmadı: \(diag())")
         XCTAssertTrue(engine.running, "Yayın kopunca çeviri kapanmamalı; yeniden bağlanmayı beklemeli")
-        guard let c2 = TCPClient(port: AudioReceiver.port) else { XCTFail(); return }
+        guard let c2 = TCPClient(port: AudioReceiver.port, timeout: 8) else { XCTFail("yeniden bağlanılamadı: \(diag())"); return }
         client = c2
-        XCTAssertTrue(waitUntil(5) { self.engine.audioConnected })
-        let cmds = String(decoding: c2.receive(timeout: 1), as: UTF8.self)
-        XCTAssertTrue(cmds.contains("V") && cmds.contains("m"), "Yeni bağlantıya istekler tekrar gitmeli: \(cmds)")
+        c2.startHeartbeat()
+        XCTAssertTrue(waitUntil(8) { self.engine.audioConnected }, diag())
+        let cmds = String(decoding: c2.receive(timeout: 1.5), as: UTF8.self)
+        // Görüntü isteği: altyazı yokken seyrek (W), varken sık (V); ses kapalı (m).
+        XCTAssertTrue((cmds.contains("V") || cmds.contains("W")) && cmds.contains("m"),
+                      "Yeni bağlantıya istekler tekrar gitmeli: \(cmds)")
         engine.stop()
     }
 
@@ -310,10 +355,11 @@ final class EngineTests: XCTestCase {
             return Wire.frame(width: pw, height: ph, orientation: 1, pixels: FakeScreen.rotateCW(upright, width: ph, height: pw))
         }
         sendRepeatedly(c, landscape(nil), times: 2)
-        sendRepeatedly(c, landscape("Nobody leaves this room until the storm is over"), times: 6)
-        let ok = waitUntil(15) { self.engine.shownOriginal.lowercased().contains("storm") }
-        XCTAssertTrue(ok, "Kilitli yatay ekranda altyazı okunmalı: \(engine.shownOriginal) | \(engine.status)")
-        XCTAssertTrue(engine.shownTranslation.contains("TR("), engine.shownTranslation)
+        let ok = sendUntil(c, landscape("Nobody leaves this room until the storm is over")) {
+            self.engine.shownOriginal.lowercased().contains("storm") && self.engine.shownTranslation.contains("TR(")
+        }
+        XCTAssertTrue(ok, "Kilitli yatay ekranda altyazı okunup çevrilmeli: \(engine.shownOriginal) | "
+                      + "\(engine.shownTranslation) | \(diag())")
     }
 
     /// Yayın açılmadan Başlat'a basıldı; uzantı geç bağlanıyor (askıdan dönüşte dinleyici yenilenmiş olmalı).
@@ -374,10 +420,9 @@ final class EngineTests: XCTestCase {
         guard let c = connectExtension() else { return }
         engine.start()
         sendRepeatedly(c, frame(nil), times: 2)
-        sendRepeatedly(c, frame("Draft then final sentence"))
         // Önce hızlı (taslak) çeviri, cümle bitince yapay zekâ
-        XCTAssertTrue(waitUntil(20) { self.engine.shownTranslation.contains("KESİN") },
-                      "son çeviri: \(engine.shownTranslation)")
+        let ok = sendUntil(c, frame("Draft then final sentence")) { self.engine.shownTranslation.contains("KESİN") }
+        XCTAssertTrue(ok, "son çeviri: \(engine.shownTranslation) | okunan: \(engine.shownOriginal) | \(diag())")
         let hosts = StubURLProtocol.requests.compactMap { $0.0.url?.host }
         XCTAssertTrue(hosts.contains("translate.googleapis.com"), "Canlı kısım ücretsiz motorla: \(hosts)")
         XCTAssertEqual(hosts.filter { $0 == "api.anthropic.com" }.count, 1, "Yapay zekâya cümle başına tek istek: \(hosts)")

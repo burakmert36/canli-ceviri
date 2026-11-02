@@ -25,7 +25,7 @@ final class OCRTests: XCTestCase {
             text = lines.map { $0.text }.joined(separator: " ")
             exp.fulfill()
         }
-        wait(for: [exp], timeout: 20)
+        wait(for: [exp], timeout: 60)   // sanitizer altında yazı tanıma çok yavaşlayabilir
         return text.lowercased()
     }
 
@@ -109,7 +109,7 @@ final class OCRTests: XCTestCase {
         for _ in 0..<tries {
             let before = results
             reader.submit(make())
-            _ = waitUntil(20) { results > before }
+            _ = waitUntil(40) { results > before }
             if done(last) { return last }
             spin(1.1)   // yön kararı belirsizse 1 sn sonra yeniden yoklanır
         }

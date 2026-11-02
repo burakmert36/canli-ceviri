@@ -118,12 +118,20 @@ final class AudioReceiver {
         queue.async {
             guard !self.closed else { return }
             self.log.add("dinleyici yenileniyor (\(reason))")
-            if let old = self.listener {
-                self.listener = nil
-                old.cancel()
-            }
-            self.startListener()
             self.startTimer()
+            guard let old = self.listener else {
+                // Önceki yenileme henüz bitmedi (eski dinleyici kapanıyor): portu kapışmadan biraz sonra aç.
+                self.queue.asyncAfter(deadline: .now() + 0.3) { [weak self] in self?.startListener() }
+                return
+            }
+            self.listener = nil
+            // Port, eski dinleyici tamamen kapanınca boşalır; yenisini o an aç ("adres kullanımda" beklemesi olmasın).
+            old.stateUpdateHandler = { [weak self] state in
+                if case .cancelled = state { self?.startListener() }
+            }
+            old.cancel()
+            // Kapanma bildirimi gecikirse yedek.
+            self.queue.asyncAfter(deadline: .now() + 0.3) { [weak self] in self?.startListener() }
         }
     }
 

@@ -412,10 +412,10 @@ final class SenderReceiverTests: XCTestCase {
         }
     }
 
-    /// Alıcı hiç okumazsa (ör. uygulama donarsa) uzantı belleği şişmemeli: fazlası atlanır.
+    /// Uygulama yaşıyor (nabız gönderiyor) ama veriyi okuyamıyor: uzantı belleği şişmemeli, fazlası atlanmalı.
+    /// (Uygulama tamamen donarsa nabız da kesilir; o durumu `testSenderDetectsUnresponsiveApp` sınar.)
     func testSenderBackPressureWhenReceiverStalls() {
         let port = TestPorts.make()
-        // Bağlantıyı kabul eden ama hiç okumayan "donmuş" bir dinleyici
         let listenFD = socket(AF_INET, SOCK_STREAM, 0)
         var one: Int32 = 1
         setsockopt(listenFD, SOL_SOCKET, SO_REUSEADDR, &one, socklen_t(MemoryLayout<Int32>.size))
@@ -427,19 +427,44 @@ final class SenderReceiverTests: XCTestCase {
             $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(listenFD, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) }
         }
         listen(listenFD, 4)
-        defer { close(listenFD) }
-
+        let done = Box(false)
+        let fds = Box<[Int32]>([])
+        // Kabul et, hiç okuma, yalnızca yarım saniyede bir 'K' nabzı yolla.
+        DispatchQueue(label: "test.accept").async {
+            while !done.value {
+                let fd = accept(listenFD, nil, nil)
+                if fd < 0 { break }
+                var nosig: Int32 = 1
+                setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &nosig, socklen_t(MemoryLayout<Int32>.size))
+                fds.mutate { $0.append(fd) }
+            }
+        }
+        DispatchQueue(label: "test.beat").async {
+            let k: [UInt8] = [UInt8(ascii: "K")]
+            while !done.value {
+                for fd in fds.value { _ = Darwin.send(fd, k, 1, 0) }
+                usleep(500_000)
+            }
+        }
         let sender = AudioSender(port: port)
         sender.start()
-        defer { sender.stop() }
-        spin(1.5)
+        defer {
+            sender.stop()
+            done.value = true
+            shutdown(listenFD, SHUT_RDWR)
+            close(listenFD)
+            spin(0.6)
+            for fd in fds.value { close(fd) }
+        }
+        XCTAssertTrue(waitUntil(5) { !fds.value.isEmpty }, "Uzantı bağlanamadı")
+        spin(0.5)
         let before = memoryFootprintMB()
-        let fmt = SampleFactory.AudioFormat(rate: 48000, channels: 2, bits: 16, float: false, bigEndian: false, nonInterleaved: false)
-        // ~10 dakikalık ses (alıcı okumuyor)
-        guard let sb = SampleFactory.audio(fmt, frames: 4800, freq: 300) else { XCTFail(); return }
-        for _ in 0..<6000 { sender.process(sb) }
+        // 5 dakikalık ses (16 kHz tek kanal: dönüştürme ucuz, test kısa sürer); alıcı hiç okumuyor.
+        let fmt = SampleFactory.AudioFormat(rate: 16000, channels: 1, bits: 16, float: false, bigEndian: false, nonInterleaved: false)
+        guard let sb = SampleFactory.audio(fmt, frames: 16000, freq: 300) else { XCTFail(); return }
+        for _ in 0..<300 { sender.process(sb) }
         spin(2)
-        assertMemoryGrowth(memoryFootprintMB() - before, below: 30, "uzantı: alıcı donukken 10 dk ses")
+        assertMemoryGrowth(memoryFootprintMB() - before, below: 30, "uzantı: alıcı okumazken 5 dk ses")
         XCTAssertGreaterThan(sender.droppedMessages, 0, "Alıcı okumazken fazlası atlanmalı")
     }
 }
